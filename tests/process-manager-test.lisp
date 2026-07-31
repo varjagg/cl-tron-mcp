@@ -92,8 +92,9 @@
   (testing "swank_process_list does not require approval"
            (let ((entry (gethash "swank_process_list" cl-tron-mcp/tools:*tool-registry*)))
              (when entry
-               (ok (not (gethash :|requiresApproval|
-                                 (cl-tron-mcp/tools:tool-entry-descriptor entry))))))))
+               (ok (eq :false
+                       (gethash :|requiresApproval|
+                                (cl-tron-mcp/tools:tool-entry-descriptor entry))))))))
 
 ;;; ============================================================
 ;;; Security: :launch-process in approval operations

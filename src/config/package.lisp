@@ -2,4 +2,9 @@
 
 (defpackage :cl-tron-mcp/config
   (:use :cl)
-  (:export #:get-config #:set-config #:get-config-value #:*version*))
+  (:export #:get-config
+           #:set-config
+           #:get-config-value
+           #:load-config-from-env
+           #:load-configuration
+           #:*version*))

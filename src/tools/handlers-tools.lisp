@@ -26,7 +26,8 @@
 (defun check-tool-approval (tool-name arguments id)
   "Check if tool requires approval and handle accordingly.
 Returns approval_required response if approval needed, nil otherwise."
-  (when (and (tool-requires-user-approval-p
+  (when (and (not (codex-approval-mode-p))
+             (tool-requires-user-approval-p
               tool-name)
              (not (cl-tron-mcp/security:whitelist-check-tool
                    tool-name arguments)))

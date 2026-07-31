@@ -17,6 +17,13 @@
 (defvar *env-var-prefix* "CL_TRON_MCP_"
   "Prefix for environment variables (e.g., CL_TRON_MCP_PORT).")
 
+(defun integration-env (name)
+  "Return integration setting NAME from the short or namespaced environment variable.
+The short TRON_* spelling is used by MCP client configurations; CL_TRON_MCP_*
+is retained as the general server configuration spelling."
+  (or (uiop:getenv (format nil "TRON_~a" name))
+      (uiop:getenv (format nil "~a~a" *env-var-prefix* name))))
+
 (defun get-config (key &optional default)
   (gethash key *config* default))
 
@@ -56,6 +63,8 @@ Supported variables:
   CL_TRON_MCP_SWANK_HOST - Swank host (default: 127.0.0.1)
   CL_TRON_MCP_SWANK_PORT - Swank port (default: 4005)
   CL_TRON_MCP_LOG_LEVEL - Log level (debug, info, warn, error)
+  TRON_APPROVAL_MODE / CL_TRON_MCP_APPROVAL_MODE - server or codex
+  TRON_TOOL_PROFILE / CL_TRON_MCP_TOOL_PROFILE - all or codex
 Returns number of variables loaded."
   (let ((loaded 0))
     (let ((port (uiop:getenv (concatenate 'string *env-var-prefix* "PORT"))))
@@ -105,6 +114,26 @@ Returns number of variables loaded."
           (when (member level-key '(:debug :info :warn :error))
             (set-config :log-level level-key)
             (incf loaded)))))
+
+    (let ((mode (integration-env "APPROVAL_MODE")))
+      (when mode
+        (let ((mode-key (intern (string-upcase mode) :keyword)))
+          (if (member mode-key '(:server :codex))
+              (progn
+                (set-config :approval-mode mode-key)
+                (incf loaded))
+              (cl-tron-mcp/logging:log-warn
+               (format nil "Invalid TRON_APPROVAL_MODE: ~a" mode))))))
+
+    (let ((profile (integration-env "TOOL_PROFILE")))
+      (when profile
+        (let ((profile-key (intern (string-upcase profile) :keyword)))
+          (if (member profile-key '(:all :codex))
+              (progn
+                (set-config :tool-profile profile-key)
+                (incf loaded))
+              (cl-tron-mcp/logging:log-warn
+               (format nil "Invalid TRON_TOOL_PROFILE: ~a" profile))))))
 
     loaded))
 
@@ -161,3 +190,5 @@ Also checks environment variables for the key."
 (set-config :swank-host "127.0.0.1")
 (set-config :swank-port 4005)
 (set-config :log-level :info)
+(set-config :approval-mode :server)
+(set-config :tool-profile :all)

@@ -29,15 +29,47 @@ trap 'rm -rf \"$tmp\"' EXIT~%
 home_dir=\"$tmp/home\"~%
 bin_dir=\"$tmp/bin\"~%
 mkdir -p \"$home_dir/.copilot\" \"$bin_dir\"~%
-for tool in bash basename cat dirname mkdir devenv; do~%
+for tool in bash basename cat dirname mkdir; do~%
   ln -sf \"$(command -v \"$tool\")\" \"$bin_dir/$tool\"~%
 done~%
-HOME=\"$home_dir\" PATH=\"$bin_dir\" ~a --client copilot-cli >/dev/null~%
+ln -sf \"$(command -v bash)\" \"$bin_dir/devenv\"~%
+HOME=\"$home_dir\" PATH=\"$bin_dir\" CL_TRON_MCP_CONFIG_LAUNCHER=devenv ~a --client copilot-cli >/dev/null~%
 cat \"$home_dir/.copilot/mcp-config.json\""
                                      (namestring (merge-pathnames "create_configs.sh" repo-root))))
                     (config (uiop:run-program (list "bash" "-lc" command)
                                               :output :string)))
                (ok (search "./run-mcp.sh --stdio-only" config)))))
+
+(deftest create-configs-generates-idempotent-codex-registration-test
+    (testing "Codex config generation is valid, advanced, and idempotent"
+             (let ((codex-path (ignore-errors
+                                 (string-right-trim
+                                  '(#\Newline #\Return)
+                                  (uiop:run-program '("bash" "-lc" "command -v codex")
+                                                    :output :string)))))
+               (if (or (null codex-path) (string= codex-path ""))
+                   (ok t "Codex CLI not installed - skipping")
+                   (let* ((repo-root (asdf:system-source-directory :cl-tron-mcp))
+                          (command (format nil
+                                           "set -euo pipefail~%tmp=$(mktemp -d)~%
+trap 'rm -rf \"$tmp\"' EXIT~%
+CODEX_HOME=\"$tmp\" ~a --client codex >/dev/null~%
+CODEX_HOME=\"$tmp\" ~a --client codex >/dev/null~%
+cat \"$tmp/config.toml\"~%
+CODEX_HOME=\"$tmp\" codex mcp get cl-tron-mcp"
+                                           (namestring (merge-pathnames
+                                                        "create_configs.sh" repo-root))
+                                           (namestring (merge-pathnames
+                                                        "create_configs.sh" repo-root))))
+                          (config (uiop:run-program (list "bash" "-lc" command)
+                                                    :output :string
+                                                    :error-output :output)))
+                     (ok (search "TRON_APPROVAL_MODE = \"codex\"" config))
+                     (ok (search "TRON_TOOL_PROFILE = \"codex\"" config))
+                     (ok (search "startup_timeout_sec = 120" config))
+                     (ok (search "default_tools_approval_mode = \"writes\"" config))
+                     (ok (search "args: --stdio-only --no-swank --swank-port 4006"
+                                 config)))))))
 
 (deftest ecl-combined-startup-stays-running-test
     (testing "Default ECL startup stays alive and serves HTTP health checks"

@@ -29,7 +29,70 @@
                       (ok (getf result :|serverInfo|))
                       (ok (string= "cl-tron-mcp"
                                    (getf (getf result :|serverInfo|)
-                                         :|name|)))))))
+                                         :|name|)))
+                      (let ((instructions (getf result :|instructions|)))
+                        (ok (stringp instructions))
+                        (ok (search "repl_status" instructions))
+                        (ok (search "never restart or kill" instructions
+                                    :test #'char-equal)))))))
+
+(deftest mcp-tool-annotations-test
+         (testing "Tool descriptors expose standard behavioral annotations"
+                  (let* ((health (cl-tron-mcp/tools::get-tool-descriptor
+                                  "health_check"))
+                         (health-annotations (gethash :|annotations| health))
+                         (eval (cl-tron-mcp/tools::get-tool-descriptor
+                               "repl_eval"))
+                         (eval-annotations (gethash :|annotations| eval))
+                         (inspect-slot (cl-tron-mcp/tools::get-tool-descriptor
+                                        "inspect_slot"))
+                         (inspect-slot-annotations
+                           (gethash :|annotations| inspect-slot))
+                         (kill (cl-tron-mcp/tools::get-tool-descriptor
+                               "swank_kill"))
+                         (kill-annotations (gethash :|annotations| kill)))
+                    (ok (eq t (gethash :|readOnlyHint| health-annotations)))
+                    (ok (eq :false (gethash :|readOnlyHint| eval-annotations)))
+                    (ok (eq :false
+                            (gethash :|readOnlyHint| inspect-slot-annotations)))
+                    (ok (eq t (gethash :|destructiveHint| kill-annotations)))
+                    (ok (eq t (gethash :|requiresApproval| eval))))))
+
+(deftest mcp-codex-tool-profile-test
+         (testing "Codex profile exposes unified tools and hides raw tools"
+                  (let ((old-profile (cl-tron-mcp/config:get-config :tool-profile)))
+                    (unwind-protect
+                         (progn
+                           (cl-tron-mcp/config:set-config :tool-profile :codex)
+                           (let* ((response (cl-tron-mcp/protocol:handle-tools-list 1))
+                                  (parsed (parse-json-response response))
+                                  (tools (getf (getf parsed :|result|) :|tools|))
+                                  (names (mapcar (lambda (tool)
+                                                   (getf tool :|name|))
+                                                 tools)))
+                             (ok (member "repl_eval" names :test #'string=))
+                             (ok (member "health_check" names :test #'string=))
+                             (ok (not (member "swank_eval" names :test #'string=)))
+                             (ok (< (length names) 94))))
+                      (cl-tron-mcp/config:set-config :tool-profile old-profile)))))
+
+(deftest mcp-codex-approval-delegation-test
+         (testing "Codex stdio mode delegates protected-tool approval to the client"
+                  (let ((old-mode (cl-tron-mcp/config:get-config :approval-mode))
+                        (old-transport (cl-tron-mcp/config:get-config :transport)))
+                    (unwind-protect
+                         (progn
+                           (cl-tron-mcp/config:set-config :approval-mode :codex)
+                           (cl-tron-mcp/config:set-config :transport :stdio-only)
+                           (let* ((params (list :|name| "swank_eval"
+                                                :|arguments| (list :|code| "(+ 1 2)")))
+                                  (response (cl-tron-mcp/protocol:handle-tool-call 1 params)))
+                             ;; No Swank connection is required for this assertion: the
+                             ;; handler may return a connection error, but it must not
+                             ;; start Tron's legacy approval handshake.
+                             (ok (not (search "approval_required" response)))))
+                      (cl-tron-mcp/config:set-config :approval-mode old-mode)
+                      (cl-tron-mcp/config:set-config :transport old-transport)))))
 
 (deftest mcp-stdio-startup-test
          (testing "Stdio first line is JSON (optional, slow - run manually)"

@@ -9,6 +9,9 @@
   (:export
     #:handle-resources-list
     #:handle-resources-read
+    #:handle-tools-list
+    #:handle-tool-call
+    #:handle-approval-respond
     #:handle-message
     #:handle-request
     #:handle-notification

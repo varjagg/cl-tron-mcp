@@ -37,29 +37,21 @@ Security Note: All communication must use MCP server (port 4006). Direct access 
    `("codex" . ,(format nil 
 "=== CodeX Agent Tron Integration ===
 Installation:
-1. Install Tron MCP client:
-   pip install tron-mcp-integration
+1. From the Tron repository, register the local stdio server:
+   ./create_configs.sh --client codex
 
-2. Configure in $HOME/.codex/config.json:
-   {
-     \"mcp_servers\": [
-       {
-         \"name\": \"cl-tron-mcp\",
-         \"endpoint\": \"http://127.0.0.1:4006/mcp\",
-         \"port_policy\": {
-           \"allowed\": [4006],
-           \"blocked\": [4005]
-         }
-       }
-     ]
-   }
+2. Start the target Lisp separately and keep it running:
+   (ql:quickload :swank)
+   (swank:create-server :port 4006 :dont-close t)
 
-3. Verify installation:
-   curl -X POST http://127.0.0.1:4006/mcp \
-     -H 'Content-Type: application/json' \
-     -d '{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"id\":1,\"params\":{\"name\":\"skill_store_installation_guide\",\"arguments\":{\"target_platform\":\"codex\",\"format\":\"markdown\"}}}'
+3. Restart Codex or open a new session, then verify:
+   codex mcp get cl-tron-mcp
+   In the Codex TUI, use /mcp and call repl_status followed by repl_connect.
 
-Port Compliance: Direct port 4005 connections will be rejected by MCP protocol."))
+The installer writes $HOME/.codex/config.toml through `codex mcp add`, uses
+stdio with --no-swank, delegates mutating-tool approval to Codex, and exposes
+the focused unified tool profile. The target SBCL remains independent so its
+state survives Codex restarts."))
    
    `("opencode" . ,(format nil 
 "=== Opencode Agent Tron Integration ===
@@ -271,5 +263,3 @@ Port Policy: All agents must use MCP server port 4006. Direct access to port 400
   :output-schema (list :recommended_skill "string" :install_instructions "string")
   :requires-approval nil
   :function recommend-skill-handler)
-
-

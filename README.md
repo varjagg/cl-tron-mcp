@@ -18,7 +18,7 @@ Tron is tested to run under SBCL or ECL.
 
 ```text
 SBCL + Swank  <---->  Tron (MCP server)  <---->  MCP client / AI agent
-your code              tools/resources            Cursor, Copilot, etc.
+your code              tools/resources            Codex, Cursor, Copilot, etc.
 debugger state         approval flow
 loaded systems         stdio or HTTP transport
 ```
@@ -64,6 +64,22 @@ The easiest way to start is from the repository root:
 `start-mcp.sh` is the canonical runtime entrypoint. `run-mcp.sh` exists only as an optional convenience wrapper for `devenv` users.
 For long-running modes, `Ctrl+C` is intercepted and stops the launcher cleanly; `./start-mcp.sh --stop` also shuts down a running instance.
 
+### Local Codex Integration
+
+Register Tron once for the Codex CLI, desktop app, and IDE extension:
+
+```bash
+./create_configs.sh --client codex
+codex mcp get cl-tron-mcp
+```
+
+The Codex registration launches Tron over stdio with an independent target
+Swank session on port 4006, Codex-native approval for mutating tools, and a
+focused high-level tool profile. Restart Codex or open a new session after
+installing; use `/mcp` in the TUI to inspect the connection. See
+[`examples/codex-config.toml.example`](examples/codex-config.toml.example)
+for the generated configuration shape.
+
 
 ### 4. Start a Swank Session
 
@@ -105,7 +121,7 @@ Example tool call:
 
 ## Tool Surface
 
-The current registry exposes **91 tools** across **14 categories**, including:
+The full registry exposes **90+ tools** across **14 categories**, including:
 
 - debugger tools (`debugger_*`, `breakpoint_*`, `step_frame`)
 - unified REPL tools (`repl_*`)

@@ -28,6 +28,7 @@
    PORT is used for HTTP/WebSocket transports.
    For stdio, log4cl is configured to stderr so stdout contains only JSON-RPC."
   (%http-startup-log (format nil "start-server entered transport=~a port=~a" transport port))
+  (cl-tron-mcp/config:set-config :transport transport)
   (when (eq *server-state* :running)
     (cl-tron-mcp/logging:log-warn "[MCP] Server is already running")
     (return-from start-server))

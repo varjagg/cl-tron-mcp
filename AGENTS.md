@@ -503,6 +503,21 @@ All operations are logged with:
 
 ## MCP Client Integration
 
+### Codex Integration
+
+Register the local stdio MCP server without overwriting the rest of the Codex
+configuration:
+
+```bash
+./create_configs.sh --client codex
+codex mcp get cl-tron-mcp
+```
+
+The generated entry is shared by the Codex CLI, desktop app, and IDE extension.
+It uses `--stdio-only --no-swank --swank-port 4006`, Codex-native write
+approval, and the focused `codex` tool profile. Restart Codex or open a new
+session, then use `/mcp`, `repl_status`, and `repl_connect` to verify it.
+
 ### OpenCode Integration
 
 Configure in `~/.config/opencode/opencode.json`:
@@ -583,5 +598,5 @@ Expected response:
 - **Docs**: See `docs/agents/` for detailed guides (modularized for token efficiency)
 - **Tools**: 91 tools implemented across 14 categories
 - **Transport**: Combined (default: stdio + HTTP), stdio-only, http-only; WebSocket (placeholder)
-- **MCP Clients**: Verified working with OpenCode, Cursor, VS Code
+- **MCP Clients**: Codex integration included; OpenCode, Cursor, and VS Code verified
 - **Token Optimization**: 49.5% token savings achieved through refactoring (Feb 2026)

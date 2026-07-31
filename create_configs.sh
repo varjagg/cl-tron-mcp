@@ -17,6 +17,7 @@
 #   - copilot-cli: GitHub Copilot CLI (~/.copilot/mcp-config.json)
 #   - opencode: OpenCode IDE
 #   - claude: Claude Desktop
+#   - codex: Codex CLI, desktop app, and IDE extension (~/.codex/config.toml)
 
 set -e
 
@@ -73,7 +74,13 @@ host_lisp_available() {
 }
 
 select_launch_script() {
-    if host_lisp_available; then
+    if [[ "${CL_TRON_MCP_CONFIG_LAUNCHER:-auto}" == "devenv" ]]; then
+        if ! command -v devenv &>/dev/null || [[ ! -x "$RUN_SCRIPT_PATH" ]]; then
+            log_error "CL_TRON_MCP_CONFIG_LAUNCHER=devenv requested; launcher unavailable"
+            exit 1
+        fi
+        SCRIPT_PATH="$RUN_SCRIPT_PATH"
+    elif host_lisp_available; then
         SCRIPT_PATH="$START_SCRIPT_PATH"
     elif command -v devenv &>/dev/null && [[ -x "$RUN_SCRIPT_PATH" ]]; then
         SCRIPT_PATH="$RUN_SCRIPT_PATH"
@@ -365,6 +372,83 @@ CLAUDEJSON
     log_info "  - Command: $SCRIPT_PATH --stdio-only"
 }
 
+configure_codex_advanced_options() {
+    local config_dir="${CODEX_HOME:-$HOME/.codex}"
+    local config_file="$config_dir/config.toml"
+    local config_tmp
+    local escaped_cwd
+
+    if [[ ! -f "$config_file" ]]; then
+        log_error "Codex config was not created at: $config_file"
+        return 1
+    fi
+
+    config_tmp=$(mktemp "$config_dir/config.toml.XXXXXX")
+    escaped_cwd=$(printf '%s' "$PROOT" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+    awk -v cwd="$escaped_cwd" '
+        function emit_options() {
+            print "cwd = \"" cwd "\""
+            print "startup_timeout_sec = 120"
+            print "tool_timeout_sec = 300"
+            print "enabled = true"
+            print "required = false"
+            print "default_tools_approval_mode = \"writes\""
+        }
+        function managed_option(line) {
+            return line ~ /^(cwd|startup_timeout_sec|tool_timeout_sec)[[:space:]]*=/ ||
+                line ~ /^(enabled|required|default_tools_approval_mode)[[:space:]]*=/
+        }
+        BEGIN { target = "[mcp_servers.cl-tron-mcp]"; in_target = 0; emitted = 0 }
+        $0 == target { in_target = 1; print; next }
+        in_target && managed_option($0) {
+            next
+        }
+        in_target && /^\[/ {
+            if (!emitted) { emit_options(); print ""; emitted = 1 }
+            in_target = 0
+        }
+        { print }
+        END {
+            if (in_target && !emitted) emit_options()
+        }
+    ' "$config_file" > "$config_tmp"
+
+    mv "$config_tmp" "$config_file"
+}
+
+generate_codex_config() {
+    local server_name="cl-tron-mcp"
+    local existing
+
+    if ! command -v codex &>/dev/null; then
+        log_error "Codex CLI is not installed or not on PATH."
+        return 1
+    fi
+
+    log_info "Configuring Codex MCP server..."
+    existing=$(codex mcp get "$server_name" 2>/dev/null || true)
+    if [[ -n "$existing" ]]; then
+        log_warn "Codex MCP server '$server_name' is already configured; preserving its command."
+        configure_codex_advanced_options
+        codex mcp get "$server_name"
+        return
+    fi
+
+    codex mcp add "$server_name" \
+        --env TRON_APPROVAL_MODE=codex \
+        --env TRON_TOOL_PROFILE=codex \
+        -- "$SCRIPT_PATH" --stdio-only --no-swank --swank-port 4006
+
+    configure_codex_advanced_options
+    codex mcp get "$server_name" >/dev/null
+
+    log_info "Created Codex MCP registration: $server_name"
+    log_info "  - Command: $SCRIPT_PATH --stdio-only --no-swank --swank-port 4006"
+    log_info "  - Approval: Codex native write approval"
+    log_info "  - Tool profile: focused unified Codex profile"
+}
+
 # ============================================================================
 # Menu Functions
 # ============================================================================
@@ -384,11 +468,12 @@ show_menu() {
     echo "  5) GitHub Copilot CLI"
     echo "  6) OpenCode IDE"
     echo "  7) Claude Desktop"
-    echo "  8) devenv integration (show instructions)"
-    echo "  9) All of the above"
-    echo " 10) Exit"
+    echo "  8) Codex"
+    echo "  9) devenv integration (show instructions)"
+    echo " 10) All of the above"
+    echo " 11) Exit"
     echo ""
-    echo -n "Enter choice (1-10): "
+    echo -n "Enter choice (1-11): "
 }
 
 generate_all() {
@@ -414,6 +499,9 @@ generate_all() {
     echo ""
     
     generate_claude_config
+    echo ""
+
+    generate_codex_config
     echo ""
 
     generate_devenv_config
@@ -465,12 +553,15 @@ main() {
                     claude)
                         generate_claude_config
                         ;;
+                    codex)
+                        generate_codex_config
+                        ;;
                     devenv)
                         generate_devenv_config
                         ;;
                     *)
                         log_error "Unknown client: $2"
-                        log_info "Supported clients: cursor, kilocode, vscode, copilot, copilot-cli, opencode, claude, devenv"
+                        log_info "Supported clients include codex; use --help for the full list"
                         exit 1
                         ;;
                 esac
@@ -485,7 +576,8 @@ main() {
                 echo "Options:"
                 echo "  --all              Generate all MCP client configurations"
                 echo "  --client <name>    Generate config for specific client"
-                echo "                     (cursor, kilocode, vscode, copilot, copilot-cli, opencode, claude, devenv)"
+                echo "                     (cursor, kilocode, vscode, copilot," \
+                    "copilot-cli, opencode, claude, codex, devenv)"
                 echo "  --help, -h         Show this help message"
                 echo ""
                 echo "Without arguments, shows an interactive menu."
@@ -541,17 +633,22 @@ main() {
                 log_info "Restart Claude Desktop to pick up the new configuration."
                 ;;
             8)
-                generate_devenv_config
+                generate_codex_config
+                echo ""
+                log_info "Restart Codex or start a new Codex session to activate Tron."
                 ;;
             9)
-                generate_all
+                generate_devenv_config
                 ;;
             10)
+                generate_all
+                ;;
+            11)
                 log_info "Exiting."
                 exit 0
                 ;;
             *)
-                log_error "Invalid choice. Please enter 1-10."
+                log_error "Invalid choice. Please enter 1-11."
                 ;;
         esac
         

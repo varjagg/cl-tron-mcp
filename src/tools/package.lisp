@@ -2,6 +2,7 @@
 ;;;; Define package for all tools
 
 (defpackage :cl-tron-mcp/tools
+  (:nicknames :cl-tron-mcp/unified)
   (:use :cl)
   (:import-from :cl-tron-mcp/config
                 #:*version*)
@@ -37,6 +38,9 @@
     #:define-validated-tool
     #:register-tool-handler
     #:list-tool-descriptors
+    #:call-tool
+    #:*tool-registry*
+    #:tool-entry-descriptor
     #:repl-help
 
    ;; Tool-call execution support (src/tools/handlers-support.lisp;

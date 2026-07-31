@@ -4,6 +4,80 @@
 
 (defvar *tool-registry* (make-hash-table :test 'equal))
 
+(defparameter *read-only-tools*
+  '("breakpoint_list" "debugger_frames" "debugger_restarts"
+    "health_check" "inspect_class" "inspect_function" "inspect_object"
+    "inspect_package" "list_callees" "profile_report"
+    "repl_backtrace" "repl_completions" "repl_describe" "repl_doc"
+    "repl_frame_locals" "repl_get_restarts" "repl_help"
+    "repl_list_breakpoints" "repl_status" "repl_threads" "runtime_stats"
+    "skill_discover" "skill_recommend" "skill_store_installation_guide"
+    "swank_autodoc" "swank_backtrace" "swank_completions"
+    "swank_debugger_state" "swank_describe" "swank_get_restarts"
+    "swank_process_list" "swank_process_status"
+    "swank_status" "swank_threads" "system_info" "thread_backtrace"
+    "thread_inspect" "thread_list" "trace_list" "whitelist_status"
+    "who_binds" "who_calls" "who_references" "who_sets")
+  "Tools that only observe state and can be marked read-only to MCP clients.")
+
+(defparameter *destructive-tools*
+  '("repl_abort" "swank_abort" "swank_interrupt" "swank_kill")
+  "Tools that can terminate a process or interrupt active target computation.")
+
+(defparameter *codex-profile-tools*
+  '("code_compile_string" "gc_run" "health_check" "inspect_class"
+    "inspect_function" "inspect_object" "inspect_package" "inspect_slot"
+    "list_callees" "profile_report" "profile_start" "profile_stop"
+    "reload_system" "repl_abort" "repl_backtrace" "repl_compile"
+    "repl_completions" "repl_connect" "repl_continue" "repl_describe"
+    "repl_disconnect" "repl_doc" "repl_eval" "repl_frame_locals"
+    "repl_get_restarts" "repl_help" "repl_inspect" "repl_invoke_restart"
+    "repl_list_breakpoints" "repl_next" "repl_out" "repl_remove_breakpoint"
+    "repl_set_breakpoint" "repl_status" "repl_step" "repl_threads"
+    "repl_toggle_breakpoint" "runtime_stats" "system_info" "thread_backtrace"
+    "thread_inspect" "thread_list" "trace_function" "trace_list"
+    "trace_remove" "who_binds" "who_calls" "who_references" "who_sets")
+  "Focused high-level tool set exposed when TRON_TOOL_PROFILE=codex.")
+
+(defun json-boolean (value)
+  "Return VALUE in the marker convention expected by json-compat."
+  (if value t :false))
+
+(defun tool-read-only-p (name)
+  "Return true when NAME is classified as observation-only."
+  (member name *read-only-tools* :test #'string=))
+
+(defun tool-destructive-p (name)
+  "Return true when NAME can terminate or interrupt target computation."
+  (member name *destructive-tools* :test #'string=))
+
+(defun make-tool-annotations (name)
+  "Build MCP-standard behavioral annotations for tool NAME."
+  (let ((annotations (make-hash-table :test 'equal))
+        (read-only (tool-read-only-p name)))
+    (setf (gethash :|readOnlyHint| annotations) (json-boolean read-only))
+    (setf (gethash :|destructiveHint| annotations)
+          (json-boolean (tool-destructive-p name)))
+    (setf (gethash :|idempotentHint| annotations) (json-boolean read-only))
+    (setf (gethash :|openWorldHint| annotations) :false)
+    annotations))
+
+(defun current-tool-profile ()
+  "Return the configured tool exposure profile."
+  (cl-tron-mcp/config:get-config :tool-profile :all))
+
+(defun tool-enabled-in-profile-p (name)
+  "Return true when tool NAME is available in the active profile."
+  (case (current-tool-profile)
+    (:codex (and (member name *codex-profile-tools* :test #'string=) t))
+    (otherwise t)))
+
+(defun codex-approval-mode-p ()
+  "Return true when a local stdio Codex client owns mutating-tool approval."
+  (and (eq (cl-tron-mcp/config:get-config :approval-mode :server) :codex)
+       (member (cl-tron-mcp/config:get-config :transport :stdio)
+               '(:stdio :stdio-only))))
+
 (defun normalize-argument-key (key)
   "Convert an incoming MCP argument key to the snake_case keyword expected by handlers."
   (let* ((raw (string key))
@@ -174,7 +248,8 @@ NIL as \"[]\"; \"properties\" must serialize as \"{}\" when empty."
     ;; the top-level descriptor-key fix already applied to this file.
     (setf (gethash :|inputSchema| descriptor) (normalize-tool-schema input-schema))
     (setf (gethash :|outputSchema| descriptor) (normalize-tool-schema output-schema))
-    (setf (gethash :|requiresApproval| descriptor) (or requires-approval nil))
+    (setf (gethash :|annotations| descriptor) (make-tool-annotations name))
+    (setf (gethash :|requiresApproval| descriptor) (json-boolean requires-approval))
     (setf (gethash :|approvalLevel| descriptor) (if requires-approval "user" "none"))
     (setf (gethash :|documentationUri| descriptor) documentation-uri)
     (setf (gethash :|concurrency| descriptor) (or concurrency "sequential"))
@@ -190,11 +265,11 @@ NIL as \"[]\"; \"properties\" must serialize as \"{}\" when empty."
       (setf (tool-entry-handler entry) handler))))
 
 (defun list-tool-descriptors ()
-  "Get list of all tool descriptors."
+  "Get tool descriptors enabled by the active tool profile."
   (let ((descriptors (make-array 0 :adjustable t :fill-pointer 0)))
     (maphash (lambda (name entry)
-               (declare (ignore name))
-               (vector-push-extend (tool-entry-descriptor entry) descriptors))
+               (when (tool-enabled-in-profile-p name)
+                 (vector-push-extend (tool-entry-descriptor entry) descriptors)))
              *tool-registry*)
     (coerce descriptors 'list)))
 
@@ -213,12 +288,14 @@ NIL as \"[]\"; \"properties\" must serialize as \"{}\" when empty."
 (defun tool-requires-user-approval-p (name)
   "Return t if tool NAME has approval level user (requires human approval)."
   (let ((desc (get-tool-descriptor name)))
-    (and desc (gethash :|requiresApproval| desc))))
+    (and desc (eq (gethash :|requiresApproval| desc) t))))
 
 (defun call-tool (name arguments)
   "Call tool by name with arguments plist.
 The plist keys are JSON-style (e.g., :|port|) and converted to proper keywords (:PORT)."
   (let ((handler (get-tool-handler name)))
+    (unless (tool-enabled-in-profile-p name)
+      (error "Tool disabled by ~a profile: ~a" (current-tool-profile) name))
     (unless handler
       (error "Unknown tool: ~a" name))
     (let ((args-list (loop for (key value) on arguments by #'cddr

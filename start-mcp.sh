@@ -686,7 +686,7 @@ Options:
   --use-ecl                 Use ECL (error if not installed)
   --stdio-only              Stdio only (short-lived, exits when client disconnects)
   --http-only               HTTP only (long-running)
-  --no-swank                Do not launch the Swank server (if given, Swank poirt is ignored)
+  --no-swank                Do not launch a Swank server inside the MCP process
   --swank-port SWANK_PORT   Swank port (default: 4005)
   --port HTTP_PORT          HTTP/WebSocket port (default: 4006)
   --websocket               Use WebSocket transport
@@ -920,7 +920,7 @@ else
     log_info "  Mode: Short-lived (exits when client disconnects)"
 fi
 log_info ""
-log_info "Available tools: 91"
+log_info "Available tools: selected by TRON_TOOL_PROFILE (default: all)"
 log_info "  - Unified REPL (Swank)"
 log_info "  - Inspector, Debugger, Profiler, Tracer"
 log_info "  - Thread management, Monitoring"
@@ -944,6 +944,9 @@ cleanup() {
         if [[ "$pid_in_file" == "$$" ]]; then
             remove_pid_file
         fi
+    fi
+    if [[ -n "${BOOT_FILE:-}" ]] && [[ -f "$BOOT_FILE" ]]; then
+        rm -f -- "$BOOT_FILE"
     fi
     exit $exit_code
 }
@@ -1006,7 +1009,7 @@ if [[ "$TRANSPORT" != "stdio" ]]; then
     write_pid_file "$$" "$HTTP_PORT" "$SWANK_PORT" "$TRANSPORT"
 fi
 
-BOOT_FILE="$PROOT/scripts/boot-generated.lisp"
+BOOT_FILE="$(mktemp "${TMPDIR:-/tmp}/cl-tron-mcp-boot.XXXXXX")"
 write_boot_lisp_header(){
     # Build and execute the command
     log_info "--"
@@ -1065,12 +1068,15 @@ write_boot_lisp_header(){
         ;; (asdf:load-system :cl-tron-mcp)
         (%boot-log "quickloaded :cl-tron-mcp")
 
+        ;; MCP client settings are supplied in the child process environment.
+        (cl-tron-mcp/config:load-config-from-env)
+
         (let ((http-port (parse-integer "$HTTP_PORT"))
               (swank-port (parse-integer "$SWANK_PORT")))
           (%boot-log "setting the http port")
-          (cl-tron-mcp/config:set-config :http_port http-port)
+          (cl-tron-mcp/config:set-config :http-port http-port)
           (%boot-log "setting the swank port")
-          (cl-tron-mcp/config:set-config :swank_port swank-port)
+          (cl-tron-mcp/config:set-config :swank-port swank-port)
 
           ;; Auto-launch Swank if LAUNCH_SWANK=true and not already running.
           ;; This block is self-contained (when/ignore-errors close here) so that
@@ -1082,6 +1088,10 @@ write_boot_lisp_header(){
               (%boot-log (format nil "Swank server started on port ~a" swank-port))))
 
           (%boot-log (format nil "starting Tron server on port ~a" http-port))
+          ;; The loader has this file open, so POSIX can unlink it before the
+          ;; blocking transport starts. This prevents stale files and lets
+          ;; multiple Codex clients launch Tron concurrently without races.
+          (ignore-errors (delete-file #p"$BOOT_FILE"))
           ;;
           ;; The start server is inserted here within the let
           ;;
@@ -1153,12 +1163,19 @@ BOOTEOF
 fi
 
 
-[[ "$LISP" = *sbcl* ]] && LISP_EXTRA="--non-interactive" || LISP_EXTRA=""
-run_long_lived_lisp \
-    "$LISP" \
-    $LISP_QUIET \
-    $LISP_EXTRA \
-    "${ECL_ARGS[@]}" \
-    $LISP_EVAL "(setq *compile-verbose* nil *load-verbose* nil)" \
-    ${LOAD_EXPR:+$LISP_EVAL "$LOAD_EXPR"} \
-    $LISP_EVAL "(load #p\"$BOOT_FILE\")"
+LISP_COMMAND=("$LISP" "$LISP_QUIET")
+[[ "$LISP" = *sbcl* ]] && LISP_COMMAND+=("--non-interactive")
+LISP_COMMAND+=("${ECL_ARGS[@]}")
+LISP_COMMAND+=("$LISP_EVAL" "(setq *compile-verbose* nil *load-verbose* nil)")
+if [[ -n "$LOAD_EXPR" ]]; then
+    LISP_COMMAND+=("$LISP_EVAL" "$LOAD_EXPR")
+fi
+LISP_COMMAND+=("$LISP_EVAL" "(load #p\"$BOOT_FILE\")")
+
+if [[ "$TRANSPORT" == "stdio" ]]; then
+    # Let Codex own the exact server process. Closing the MCP pipe now reaches
+    # Lisp directly, so EOF terminates the server without an orphaning shell.
+    exec "${LISP_COMMAND[@]}"
+else
+    run_long_lived_lisp "${LISP_COMMAND[@]}"
+fi

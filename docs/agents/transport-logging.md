@@ -12,7 +12,7 @@ Runs both stdio and HTTP transports simultaneously:
 (cl-tron-mcp/core:start-server)
 ```
 
-- **Stdio**: For MCP clients (Cursor, Kilocode, Opencode)
+- **Stdio**: For MCP clients (Codex, Cursor, Kilocode, Opencode)
 - **HTTP**: For web clients and testing on port 4006
 - **Lifecycle**: The long-running shell launcher keeps HTTP as the process anchor and runs stdio in the background so EOF on stdin does not immediately tear down the server
 - **Shutdown**: `Ctrl+C` on `./start-mcp.sh` or `./start-mcp.sh --stop` should stop the supervised Lisp child cleanly
@@ -29,6 +29,13 @@ Or via script:
 
 ```bash
 ./start-mcp.sh --stdio-only
+```
+
+For Codex, keep the target Lisp independent from the MCP process:
+
+```bash
+TRON_APPROVAL_MODE=codex TRON_TOOL_PROFILE=codex \
+  ./start-mcp.sh --stdio-only --no-swank --swank-port 4006
 ```
 
 ### HTTP-Only Mode

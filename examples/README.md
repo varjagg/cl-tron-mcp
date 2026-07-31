@@ -23,6 +23,7 @@ MCP clients (Cursor, VS Code, Kilocode) support tilde expansion but do not suppo
 ./create_configs.sh --client vscode
 ./create_configs.sh --client opencode
 ./create_configs.sh --client claude
+./create_configs.sh --client codex
 
 # Or use start-mcp.sh --config (same as create_configs.sh)
 ./start-mcp.sh --config
@@ -36,6 +37,7 @@ The script generates configuration files with absolute paths (no `~` or `$HOME`)
 | `opencode-mcp.json.example` | OpenCode | `~/.config/opencode/opencode.json` |
 | `kilocode-mcp.json.example` | Kilocode | `~/.kilocode/cli/config.json` (or equivalent) |
 | `mcp-kilocode.json` | Kilocode | Alternative Kilocode config |
+| `codex-config.toml.example` | Codex CLI/app/IDE | `~/.codex/config.toml` |
 
 **Example clients:** `test_client.py` and `cl_tron_client.py` are minimal Python clients for testing MCP (e.g. run from repo root with `PYTHONPATH=examples python examples/test_client.py`).
 
