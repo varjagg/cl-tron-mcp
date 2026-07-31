@@ -73,10 +73,9 @@ Returns nil if no approval params present."
 (defun execute-tool-with-timeout (tool-name arguments id)
   "Execute tool with timeout, metrics recording, and request tracing.
 Returns JSON-RPC response with result or error."
-  (let ((start-time (get-universal-time))
-        (start-tick (get-internal-real-time))
-        (timeout-seconds *default-tool-timeout*)
-        (result nil)
+  (let ((start-tick (get-internal-real-time))
+        (timeout-seconds (requested-tool-timeout arguments))
+        (response nil)
         (error-occurred nil))
     (cl-tron-mcp/monitor:trace-log "executing tool ~a" tool-name)
     (unwind-protect
@@ -84,30 +83,28 @@ Returns JSON-RPC response with result or error."
                          ;; Track this request for cleanup
                          (bordeaux-threads:with-lock-held (*request-lock*)
                            (setf (gethash id *pending-requests*) t))
-                         ;; Check timeout before executing
-                         (let ((elapsed (- (get-universal-time)
-                                           start-time)))
-                           (when (>= elapsed timeout-seconds)
-                             (error 'timeout-error
-                                    :message (format nil "Tool execution timeout after ~d seconds"
-                                                     timeout-seconds))))
-                         ;; Execute tool
-                         (setf result (call-tool tool-name arguments))
-                         ;; Check timeout after execution
-                         (let ((elapsed (- (get-universal-time)
-                                           start-time)))
-                           (when (>= elapsed timeout-seconds)
-                             (error 'timeout-error
-                                    :message (format nil "Tool execution timeout after ~d seconds"
-                                                     timeout-seconds))))
-                         ;; Return success response
-                         (cl-tron-mcp/json-compat:to-json (list :|jsonrpc| "2.0"
-                                                 :|id| id
-                                                 :|result| (list :|content| (list (list :|type| "text"
-                                                                                        :|text| (format nil "~a" result)))))))
+                         ;; Interrupt the request thread at the deadline rather
+                         ;; than merely checking the clock after it returns.
+                         (setf response
+                               (call-with-timeout
+                                (lambda ()
+                                  (let* ((tool-result
+                                           (call-tool tool-name arguments))
+                                         (text
+                                           (let ((*print-circle* t))
+                                             (format nil "~a" tool-result))))
+                                    (cl-tron-mcp/json-compat:to-json
+                                     (list :|jsonrpc| "2.0"
+                                           :|id| id
+                                           :|result|
+                                           (list :|content|
+                                                 (list (list :|type| "text"
+                                                             :|text| text)))))))
+                                timeout-seconds))
+                         response)
            (timeout-error (e)
              (setf error-occurred t)
-             (cl-tron-mcp/logging:log-warn (format nil "Tool ~a timed out after ~d seconds"
+             (cl-tron-mcp/logging:log-warn (format nil "Tool ~a timed out after ~a seconds"
                                                    tool-name timeout-seconds))
              (make-error-response id
                                   -32008

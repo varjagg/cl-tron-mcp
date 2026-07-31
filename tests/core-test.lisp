@@ -11,6 +11,87 @@
              (cl-tron-mcp/config:set-config :test-key "test-value")
              (ok (string= (cl-tron-mcp/config:get-config :test-key) "test-value"))))
 
+(deftest combined-stdio-thread-captures-protocol-streams-test
+  (testing "combined-mode stdio retains the creator's protocol streams"
+    (let ((original-start
+            (symbol-function 'cl-tron-mcp/transport:start-stdio-transport))
+          (protocol-input (make-string-input-stream ""))
+          (protocol-output (make-string-output-stream))
+          (diagnostic-output (make-string-output-stream))
+          (seen-input nil)
+          (seen-output nil)
+          (seen-error nil))
+      (unwind-protect
+           (progn
+             (setf (symbol-function
+                    'cl-tron-mcp/transport:start-stdio-transport)
+                   (lambda (&rest arguments)
+                     (declare (ignore arguments))
+                     (setf seen-input *standard-input*
+                           seen-output *standard-output*
+                           seen-error *error-output*)))
+             (let* ((*standard-input* protocol-input)
+                    (*standard-output* protocol-output)
+                    (*error-output* diagnostic-output)
+                    (thread (cl-tron-mcp/core::make-stdio-transport-thread)))
+               (bordeaux-threads:join-thread thread))
+             (ok (eq protocol-input seen-input))
+             (ok (eq protocol-output seen-output))
+             (ok (eq diagnostic-output seen-error))
+             (ok (null cl-tron-mcp/core::*transport-thread*)))
+        (setf (symbol-function 'cl-tron-mcp/transport:start-stdio-transport)
+              original-start)))))
+
+(deftest combined-http-startup-failure-stops-stdio-test
+  (testing "partial combined startup runs the ordinary transport cleanup"
+    (let ((original-thread-maker
+            (symbol-function 'cl-tron-mcp/core::make-stdio-transport-thread))
+          (original-http-start
+            (symbol-function 'cl-tron-mcp/transport:start-http-transport))
+          (original-http-stop
+            (symbol-function 'cl-tron-mcp/transport:stop-http-transport))
+          (original-stdio-stop
+            (symbol-function 'cl-tron-mcp/transport:stop-stdio-transport))
+          (http-stopped-p nil)
+          (stdio-stopped-p nil)
+          (cl-tron-mcp/core::*server-state* :stopped)
+          (cl-tron-mcp/core::*current-transport* nil)
+          (cl-tron-mcp/core::*transport-thread* nil))
+      (unwind-protect
+           (progn
+             (setf (symbol-function
+                    'cl-tron-mcp/core::make-stdio-transport-thread)
+                   (lambda () nil)
+                   (symbol-function
+                    'cl-tron-mcp/transport:start-http-transport)
+                   (lambda (&rest arguments)
+                     (declare (ignore arguments))
+                     (error "HTTP bind failed"))
+                   (symbol-function
+                    'cl-tron-mcp/transport:stop-http-transport)
+                   (lambda () (setf http-stopped-p t))
+                   (symbol-function
+                    'cl-tron-mcp/transport:stop-stdio-transport)
+                   (lambda () (setf stdio-stopped-p t)))
+             (ok (eq :stopped
+                     (cl-tron-mcp/core:start-server
+                      :transport :combined :port 4018)))
+             (ok http-stopped-p)
+             (ok stdio-stopped-p)
+             (ok (null cl-tron-mcp/core::*current-transport*)))
+        (setf (symbol-function
+               'cl-tron-mcp/core::make-stdio-transport-thread)
+              original-thread-maker
+              (symbol-function
+               'cl-tron-mcp/transport:start-http-transport)
+              original-http-start
+              (symbol-function
+               'cl-tron-mcp/transport:stop-http-transport)
+              original-http-stop
+              (symbol-function
+               'cl-tron-mcp/transport:stop-stdio-transport)
+              original-stdio-stop)))))
+
 (deftest tracer-test
     (testing "Tracer can add and remove trace"
              (let ((result (cl-tron-mcp/tracer:trace-function "cl-tron-mcp/core::dummy-func")))
@@ -67,6 +148,7 @@ CODEX_HOME=\"$tmp\" codex mcp get cl-tron-mcp"
                      (ok (search "TRON_APPROVAL_MODE = \"codex\"" config))
                      (ok (search "TRON_TOOL_PROFILE = \"codex\"" config))
                      (ok (search "startup_timeout_sec = 120" config))
+                     (ok (search "tool_timeout_sec = 3700" config))
                      (ok (search "default_tools_approval_mode = \"writes\"" config))
                      (ok (search "args: --stdio-only --no-swank --swank-port 4006"
                                  config)))))))

@@ -8,6 +8,58 @@
 (defvar *server-state* :stopped)
 (defvar *current-transport* nil)
 (defvar *transport-thread* nil)
+(defvar *transport-thread-lock*
+  (bordeaux-threads:make-lock "mcp-transport-thread"))
+
+(defun join-thread-with-timeout (thread timeout)
+  "Join THREAD for at most TIMEOUT seconds; return true when it stopped."
+  (handler-case
+      (progn
+        (bordeaux-threads:with-timeout (timeout)
+          (bordeaux-threads:join-thread thread))
+        t)
+    (bordeaux-threads:timeout () nil)))
+
+(defun make-stdio-transport-thread ()
+  "Start combined-mode stdio with explicit ownership of the process streams."
+  (let ((protocol-input *standard-input*)
+        (protocol-output *standard-output*)
+        (diagnostic-output *error-output*)
+        (start-lock (bordeaux-threads:make-lock "mcp-stdio-start"))
+        (start-condition (bordeaux-threads:make-condition-variable))
+        (session-token
+          (cl-tron-mcp/transport::reserve-stdio-session))
+        (published-p nil)
+        thread)
+    (setf thread
+          (bordeaux-threads:make-thread
+           (lambda ()
+             ;; Do not let a fast EOF finish before the creator publishes the
+             ;; handle that this thread is responsible for clearing.
+             (bordeaux-threads:with-lock-held (start-lock)
+               (loop until published-p
+                     do (bordeaux-threads:condition-wait
+                         start-condition start-lock)))
+             ;; New Lisp threads do not portably inherit the creator's dynamic
+             ;; stream bindings.  Re-establish them before stdio captures them.
+             (let ((*standard-input* protocol-input)
+                   (*standard-output* protocol-output)
+                   (*error-output* diagnostic-output))
+               (unwind-protect
+                    (cl-tron-mcp/transport:start-stdio-transport
+                     :session-token session-token)
+                 (bordeaux-threads:with-lock-held
+                     (*transport-thread-lock*)
+                   (when (eq *transport-thread*
+                             (bordeaux-threads:current-thread))
+                     (setf *transport-thread* nil))))))
+           :name "mcp-stdio-combined"))
+    (bordeaux-threads:with-lock-held (*transport-thread-lock*)
+      (setf *transport-thread* thread))
+    (bordeaux-threads:with-lock-held (start-lock)
+      (setf published-p t)
+      (bordeaux-threads:condition-notify start-condition))
+    thread))
 
 (defun %http-startup-log (msg)
   (flet ((try (path)
@@ -42,13 +94,7 @@
            (setq *current-transport* :combined)
            
            (%http-startup-log "start-server: starting stdio in background")
-           (setq *transport-thread*
-                 (bordeaux-threads:make-thread
-                  (lambda ()
-                    (unwind-protect
-                         (cl-tron-mcp/transport:start-stdio-transport)
-                      (setq *transport-thread* nil)))
-                  :name "mcp-stdio-combined"))
+           (make-stdio-transport-thread)
 
            (%http-startup-log "start-server: starting HTTP (blocking)")
            (cl-tron-mcp/transport:start-http-transport :port port :block t)
@@ -74,6 +120,9 @@
            (setq *server-state* :stopped)))
         *server-state*)
     (serious-condition (e)
+      ;; Combined startup may already have published the stdio worker when HTTP
+      ;; startup fails.  Run the ordinary shutdown path before clearing state.
+      (ignore-errors (stop-server))
       (setq *server-state* :stopped)
       (setq *current-transport* nil)
       (cl-tron-mcp/logging:log-error (format nil "[MCP] Server error: ~a" e))
@@ -87,14 +136,26 @@
     (cl-tron-mcp/logging:log-warn "[MCP] Server is not running")
     (return-from stop-server))
   (cl-tron-mcp/logging:log-info "[MCP] Stopping server...")
-  (case *current-transport*
-    (:combined
-     (cl-tron-mcp/transport:stop-http-transport)
-     (cl-tron-mcp/transport:stop-stdio-transport))
-    (:stdio (cl-tron-mcp/transport:stop-stdio-transport))
-    (:http (cl-tron-mcp/transport:stop-http-transport))
-    (:websocket (cl-tron-mcp/transport:stop-websocket-transport)))
-  (setq *transport-thread* nil)
+  (let ((transport-thread
+          (bordeaux-threads:with-lock-held (*transport-thread-lock*)
+            *transport-thread*)))
+    (case *current-transport*
+      (:combined
+       (cl-tron-mcp/transport:stop-http-transport)
+       (cl-tron-mcp/transport:stop-stdio-transport))
+      (:stdio (cl-tron-mcp/transport:stop-stdio-transport))
+      (:http (cl-tron-mcp/transport:stop-http-transport))
+      (:websocket (cl-tron-mcp/transport:stop-websocket-transport)))
+    (when (and transport-thread
+               (not (eq transport-thread
+                        (bordeaux-threads:current-thread))))
+      (ignore-errors
+        (join-thread-with-timeout transport-thread 2)))
+    (when (or (null transport-thread)
+              (not (bordeaux-threads:thread-alive-p transport-thread)))
+      (bordeaux-threads:with-lock-held (*transport-thread-lock*)
+        (when (eq *transport-thread* transport-thread)
+          (setf *transport-thread* nil)))))
   (setq *current-transport* nil)
   (setq *server-state* :stopped)
   (cl-tron-mcp/logging:log-info "[MCP] Server stopped"))

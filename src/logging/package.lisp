@@ -10,4 +10,6 @@
    #:log-warn
    #:log-error
    #:get-log-config
-   #:ensure-log-to-stream))
+   #:ensure-log-to-stream
+   #:call-with-diagnostic-io
+   #:make-diagnostic-thread))

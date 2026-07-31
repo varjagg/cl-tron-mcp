@@ -42,24 +42,28 @@
   "Handle incoming JSON-RPC message.
 Dispatches to appropriate handler based on method name.
 Messages without ID are treated as notifications."
-  (handler-case (let* ((parsed (if (stringp message)
-                                   (cl-tron-mcp/json-compat:parse message)
-                                   message))
-                       (id (getf parsed :|id|))
-                       (method (getf parsed :|method|))
-                       (params (getf parsed :|params|)))
-                  (cond
-                    ((null id)
-                     (handle-notification method params))
-                    (t (handle-request id method params))))
-    (com.inuoe.jzon:json-error (e)
-      (cl-tron-mcp/logging:log-error (format nil "JSON parse error: ~a" e))
-      (make-error-response nil -32700 "Parse error"))
-    (error (e)
-      (cl-tron-mcp/logging:log-error (format nil "Error handling message: ~a" e))
-      (make-error-response nil
-                           -32603
-                           (princ-to-string e)))))
+  (let ((request-id :null))
+    (handler-case
+        (let* ((parsed (if (stringp message)
+                           (cl-tron-mcp/json-compat:parse message)
+                           message))
+               (id (getf parsed :|id|))
+               (method (getf parsed :|method|))
+               (params (getf parsed :|params|)))
+          ;; Once parsing succeeds, internal errors must remain correlated with
+          ;; the request that caused them.
+          (setf request-id (or id :null))
+          (cond
+            ((null id)
+             (handle-notification method params))
+            (t (handle-request id method params))))
+      (com.inuoe.jzon:json-error (e)
+        (cl-tron-mcp/logging:log-error (format nil "JSON parse error: ~a" e))
+        (make-error-response :null -32700 "Parse error"))
+      (error (e)
+        (cl-tron-mcp/logging:log-error
+         (format nil "Error handling message: ~a" e))
+        (make-error-response request-id -32603 (princ-to-string e))))))
 
 (defun handle-request (id method params)
   "Handle JSON-RPC 2.0 request.

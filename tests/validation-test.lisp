@@ -92,7 +92,9 @@
 (deftest test-validate-package-name
     (testing "validate-package-name accepts valid package names"
              (ok (stringp (validate-package-name "test" "my-package")))
-             (ok (stringp (validate-package-name "test" "CL-USER")))))
+             (ok (stringp (validate-package-name "test" "CL-USER")))
+             (ok (stringp (validate-package-name "test" "foo.bar")))
+             (ok (stringp (validate-package-name "test" "foo/bar")))))
 
 (deftest test-validate-package-name-fails
     (testing "validate-package-name rejects invalid package names"

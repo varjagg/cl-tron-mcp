@@ -50,6 +50,9 @@ Includes hints for starting Swank and connecting."
      (repl-connect :type :swank :port 4005)
 
    Returns: Connection status with :type :swank"
+  (when (and *repl-connected* (not (cl-tron-mcp/swank:swank-connected-p)))
+    (setf *repl-connected* nil
+          *repl-type* nil))
   (when *repl-connected*
     (return-from repl-connect (make-already-connected-error)))
 
@@ -68,7 +71,7 @@ Includes hints for starting Swank and connecting."
                  *repl-type* :swank
                  *repl-port* port
                  *repl-host* host))
-         (list* result (list :type :swank))))
+         (append result (list :type :swank))))
 
       (t
        (cl-tron-mcp/resources:make-error-with-hint "REPL_DETECTION_FAILED"
@@ -95,11 +98,17 @@ slot on :spawn-style servers)."
 
 (defun repl-connected-p ()
   "Return T if currently connected to a REPL."
-  (and *repl-connected* t))
+  (let ((connected-p
+          (and *repl-connected*
+               (not (null (cl-tron-mcp/swank:swank-connected-p))))))
+    (unless connected-p
+      (setf *repl-connected* nil
+            *repl-type* nil))
+    connected-p))
 
 (defun repl-status ()
   "Get the current REPL connection status."
-  (list :connected *repl-connected*
+  (list :connected (repl-connected-p)
         :type *repl-type*
         :host *repl-host*
         :port *repl-port*))
@@ -108,7 +117,7 @@ slot on :spawn-style servers)."
 ;;; Unified Evaluation
 ;;; ============================================================
 
-(defun repl-eval (&key code (package "CL-USER"))
+(defun repl-eval (&key code (package "CL-USER") (timeout 300))
   "Evaluate Lisp code via the connected REPL.
 
    Example:
@@ -123,7 +132,7 @@ slot on :spawn-style servers)."
   (unless *repl-connected*
     (return-from repl-eval (make-not-connected-error)))
 
-  (let ((result (mcp-swank-eval :code code :package package)))
+  (let ((result (mcp-swank-eval :code code :package package :timeout timeout)))
     (when (getf result :value)
       (setf (getf result :result) (getf result :value)))
     result))
@@ -153,7 +162,7 @@ slot on :spawn-style servers)."
   "Abort a thread or interrupt evaluation."
   (unless *repl-connected*
     (return-from repl-abort (make-not-connected-error)))
-  (mcp-swank-abort :thread-id thread))
+  (mcp-swank-abort :thread-id (or thread t)))
 
 (defun repl-backtrace ()
   "Get the current backtrace."
@@ -311,13 +320,16 @@ the debugger's restart list, matching the order shown in the :debug payload)."
 
 (define-validated-tool "repl_eval"
   "Evaluate Lisp code in REPL"
-  :input-schema (list :code "string" :package "string")
+  :input-schema (list :code "string" :package "string" :timeout "integer")
   :output-schema (list :type "object")
   :requires-approval t
   :documentation-uri "file://docs/tools/repl-eval.md"
   :validation ((validate-string "code" code :required t :min-length 1)
-               (when package (validate-package-name "package" package)))
-  :body (repl-eval :code code :package (or package "CL-USER")))
+               (when package (validate-package-name "package" package))
+               (when timeout (validate-integer "timeout" timeout :min 1 :max 3600)))
+  :body (repl-eval :code code
+                   :package (or package "CL-USER")
+                   :timeout (or timeout 300)))
 
 (define-validated-tool "repl_compile"
   "Compile and load Lisp code"
@@ -456,7 +468,8 @@ the debugger's restart list, matching the order shown in the :debug payload)."
 
 (define-validated-tool "repl_set_breakpoint"
   "Set a breakpoint"
-  :input-schema (list :function "string" :condition "string" :hitCount "integer" :thread "string")
+  :input-schema (list :function "string" :condition "string"
+                      :hit_count "integer" :thread "string")
   :output-schema (list :type "object")
   :requires-approval t
   :documentation-uri "file://docs/tools/repl-set-breakpoint.md"
@@ -464,16 +477,17 @@ the debugger's restart list, matching the order shown in the :debug payload)."
                (when condition (validate-string "condition" condition))
                (when hit_count (validate-integer "hit_count" hit_count :min 0))
                (when thread (validate-string "thread" thread)))
-  :body (repl-set-breakpoint :function function :condition condition :hit-count hit_count :thread thread))
+  :body (repl-set-breakpoint :function function :condition condition
+                             :hit_count hit_count :thread thread))
 
 (define-validated-tool "repl_remove_breakpoint"
   "Remove a breakpoint"
-  :input-schema (list :breakpointId "integer")
+  :input-schema (list :breakpoint_id "integer")
   :output-schema (list :type "object")
   :requires-approval nil
   :documentation-uri "file://docs/tools/repl-remove-breakpoint.md"
   :validation ((validate-integer "breakpoint_id" breakpoint_id :required t :min 0))
-  :body (repl-remove-breakpoint :breakpoint-id breakpoint_id))
+  :body (repl-remove-breakpoint :breakpoint_id breakpoint_id))
 
 (define-simple-tool "repl_list_breakpoints"
   "List all breakpoints"
@@ -485,12 +499,12 @@ the debugger's restart list, matching the order shown in the :debug payload)."
 
 (define-validated-tool "repl_toggle_breakpoint"
   "Toggle breakpoint state"
-  :input-schema (list :breakpointId "integer")
+  :input-schema (list :breakpoint_id "integer")
   :output-schema (list :type "object")
   :requires-approval nil
   :documentation-uri "file://docs/tools/repl-toggle-breakpoint.md"
   :validation ((validate-integer "breakpoint_id" breakpoint_id :required t :min 0))
-  :body (repl-toggle-breakpoint :breakpoint-id breakpoint_id))
+  :body (repl-toggle-breakpoint :breakpoint_id breakpoint_id))
 
 (define-simple-tool "repl_help"
   "Get help on REPL tools"

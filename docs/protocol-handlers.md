@@ -97,8 +97,8 @@ Each validation function returns a plist with `:valid` key and optional `:error`
 The `cleanup-on-error` function performs cleanup when errors occur:
 
 - Logs the error
-- Disconnects from Swank if connected
-- Clears pending requests
+- Clears stale tool request tracking
+- Preserves the live Swank connection
 - Logs cleanup completion
 
 ### Error Responses
@@ -111,15 +111,15 @@ The `make-error-response` function creates JSON-RPC error responses with:
 
 ### Timeout Handling
 
-The `with-timeout` macro executes code with a timeout:
+The `call-with-timeout` helper executes a thunk with an interrupting deadline:
 
 ```lisp
-(with-timeout (30)
-  ;; Code that should complete within 30 seconds
-  ...)
+(call-with-timeout (lambda () (perform-tool-operation)) 300)
 ```
 
-If timeout occurs, a `timeout-error` condition is signaled.
+If the deadline expires, a `timeout-error` condition is signaled. Tools with
+their own `timeout` argument receive a short cleanup grace period before the
+outer execution deadline can interrupt them.
 
 ## Global State
 
@@ -127,7 +127,7 @@ The following global variables are used:
 
 - `*message-handler*` - Current message handler
 - `*request-id*` - Current request ID
-- `*default-tool-timeout*` - Default timeout for tool execution (30 seconds)
+- `*default-tool-timeout*` - Default timeout for tool execution (300 seconds)
 - `*pending-requests*` - Hash table tracking pending requests for cleanup
 - `*request-lock*` - Lock for synchronizing access to `*pending-requests*`
 

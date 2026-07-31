@@ -20,13 +20,13 @@ This error occurs when a request does not complete within the expected time fram
 1. Increase timeout if operation is expected to take longer
 2. Check server status and resources
 3. Break long operations into smaller chunks
-4. Use `request_cancel` to cancel and retry
+4. Use `repl_abort` or `swank_interrupt` when target code is still running
 
 ## Example
 
 ```lisp
-;; Cancel timed out request
-(request_cancel :request-id "req-123")
+;; Interrupt target code that continued after Tron's wait deadline
+(repl_abort)
 
 ;; Retry with simpler operation
 (swank_eval :code "(+ 1 2)")
@@ -38,6 +38,5 @@ This error occurs when a request does not complete within the expected time fram
 
 ## Related Tools
 
-- `request_cancel` - Cancel a request
-- `request_status` - Check request status
-- `request_list` - List active requests
+- `repl_abort` - Interrupt or abort the active REPL evaluation
+- `swank_interrupt` - Send Swank's protocol-level interrupt

@@ -20,7 +20,7 @@ When TIMEOUT is positive, evaluation is interrupted if it exceeds TIMEOUT second
                     (error-cell (list nil))
                     (done nil))
                 (let ((eval-thread
-                        (bt:make-thread
+                        (cl-tron-mcp/logging:make-diagnostic-thread
                          (lambda ()
                            (handler-case (setf (car result-cell) (do-eval))
                              (error (e) (setf (car error-cell) e)))

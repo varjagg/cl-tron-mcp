@@ -2,18 +2,19 @@
 
 **Short Description:** Abort a thread
 
-**Full Description:** Abort a specific thread in the connected SBCL. REQUIRES: swank_connect first. Useful when a thread is stuck or in an error condition.
+**Full Description:** Abort the active debugger when it belongs to the selected thread, or send Swank's protocol-level interrupt to that thread. REQUIRES: swank_connect first.
 
 **Parameters:**
 
-- `threadId`: Thread ID to abort (required)
+- `threadId`: Numeric thread ID from `swank_threads` (required)
 
-**Returns:** Abort status
+**Returns:** Success status after the debugger exits, or interrupt status when
+the selected thread was not already in the debugger.
 
 **Example Usage:**
 
 ```lisp
-(swank_abort :threadId "main")
+(swank_abort :threadId 12)
 ```
 
-**Notes:** Requires user approval. Use swank_threads to get thread IDs. Aborting a thread terminates it forcefully.
+**Notes:** Requires user approval. An interrupt enters the debugger; when that thread is already in the debugger, this invokes Swank's `SLDB-ABORT` operation.

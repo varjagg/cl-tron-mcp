@@ -22,14 +22,20 @@
 
 (define-validated-tool "reload_system"
   "Reload an ASDF system in the connected Lisp image via Swank. Falls back to local reload when not connected."
-  :input-schema (list :systemName "string" :force "boolean")
+  :input-schema (list :systemName "string" :force "boolean" :timeout "integer")
   :output-schema (list :type "object")
   :requires-approval t
   :documentation-uri "file://docs/tools/reload-system.md"
   :validation ((validate-string "system_name" system_name :required t :min-length 1)
-               (when force (validate-boolean "force" force)))
+               (when force (validate-boolean "force" force))
+               (when timeout (validate-integer "timeout" timeout :min 1 :max 3600)))
   :body (if (repl-connected-p)
             (repl-eval
              :code (format nil "(asdf:load-system ~s~a)"
-                           system_name (if force " :force :all" "")))
-            (cl-tron-mcp/hot-reload:reload-system :system-name system_name :force force)))
+                           system_name (if force " :force :all" ""))
+             :timeout (or timeout 300))
+            (call-with-timeout
+             (lambda ()
+               (cl-tron-mcp/hot-reload:reload-system
+                :system-name system_name :force force))
+             (or timeout 300))))

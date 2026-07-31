@@ -147,6 +147,10 @@ Returns the decoded S-expression string."
              (octets (read-chunk stream length :timeout timeout))
              (string (utf8-to-string octets)))
         string)
+    ;; Preserve the specific condition so the reader loop can treat a bounded
+    ;; lack of input as nonfatal rather than reconnecting a healthy socket.
+    (swank-read-timeout (c)
+      (error c))
     (condition (c)
       (error 'swank-read-error :condition c :stream stream))))
 
@@ -167,6 +171,8 @@ MESSAGE is an S-expression that will be printed with *PRINT-CASE* = :downcase."
         (write-header stream length)
         (write-sequence octets stream)
         (finish-output stream))
+    (bordeaux-threads:timeout (condition)
+      (error condition))
     (condition (c)
       (error 'swank-write-error :condition c :message message))))
 

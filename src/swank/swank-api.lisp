@@ -11,7 +11,8 @@
 ;;; Code Evaluation
 ;;; ============================================================
 
-(defun swank-eval (&key code (package "CL-USER"))
+(defun swank-eval (&key code (package "CL-USER")
+                     (timeout *default-eval-timeout*))
   "Evaluate Lisp code string via Swank (swank:eval-and-grab-output)."
   (unless (and code (stringp code) (plusp (length code)))
     (return-from swank-eval
@@ -22,7 +23,7 @@
       (cl-tron-mcp/resources:make-error-with-hint "INVALID_PACKAGE_PARAMETER"
                                              :details (list :function "swank-eval"))))
   (send-request `(,(swank-sym "EVAL-AND-GRAB-OUTPUT") ,code)
-                :package package :thread t))
+                :package package :thread t :timeout timeout))
 
 (defun swank-compile (&key code (package "CL-USER") (filename "repl"))
   "Compile Lisp code string via Swank (swank:compile-string-for-emacs)."
@@ -112,13 +113,18 @@ resolve-debugger-thread)."
 Index 0 is the first restart shown in the :debug payload (typically
 CONTINUE); this matches Swank's INVOKE-NTH-RESTART-FOR-EMACS, whose N
 indexes *sldb-restarts* from 0."
-  (let ((thread (or *debugger-thread* t))
-        (level *debugger-level*))
+  (multiple-value-bind (thread level episode)
+      (bordeaux-threads:with-lock-held (*event-mutex*)
+        (values (or *debugger-thread* t)
+                *debugger-level*
+                *debugger-episode*))
     (let ((response (send-request `(,(swank-sym "INVOKE-NTH-RESTART-FOR-EMACS") ,level ,restart_index)
                                  :package "CL-USER" :thread thread)))
       (when (and (<= level 1)
                 (%debugger-abort-response-p response))
-        (note-debugger-return level))
+        (note-debugger-return level
+                              :expected-thread thread
+                              :expected-episode episode))
       response)))
 
 (defun swank-get-restarts (&optional (frame-index 0))
@@ -139,14 +145,20 @@ indexes *sldb-restarts* from 0."
 
 (defun swank-continue ()
   "Continue execution from debugger."
-  (let* ((level *debugger-level*)
-         (response (send-request `(,(swank-sym "SLDB-CONTINUE"))
-                                 :package "CL-USER"
-                                 :thread (or *debugger-thread* t))))
-    (when (and (<= level 1)
-               (%debugger-abort-response-p response))
-      (note-debugger-return level))
-    response))
+  (multiple-value-bind (thread level episode)
+      (bordeaux-threads:with-lock-held (*event-mutex*)
+        (values (or *debugger-thread* t)
+                *debugger-level*
+                *debugger-episode*))
+    (let ((response (send-request `(,(swank-sym "SLDB-CONTINUE"))
+                                  :package "CL-USER"
+                                  :thread thread)))
+      (when (and (<= level 1)
+                 (%debugger-abort-response-p response))
+        (note-debugger-return level
+                              :expected-thread thread
+                              :expected-episode episode))
+      response)))
 
 ;;; ============================================================
 ;;; Stepping
@@ -255,24 +267,50 @@ instead of using swank:break directly."
   "List all threads in the Swank-connected SBCL."
   (send-request `(,(swank-sym "LIST-THREADS")) :package "CL-USER" :thread t))
 
-(defun swank-abort-thread (&key (thread-id :repl-thread))
-  "Abort THREAD-ID (default: current REPL thread)."
-  (send-request `(,(swank-sym "ABORT-THREAD") ,thread-id)
-                :package "CL-USER" :thread t))
+(defun send-swank-interrupt (thread-id)
+  "Send Swank's protocol-level interrupt event to THREAD-ID."
+  (multiple-value-bind (generation connected-p)
+      (live-connection-generation)
+    (unless connected-p
+      (return-from send-swank-interrupt
+        (cl-tron-mcp/resources:make-error "SWANK_NOT_CONNECTED")))
+    (handler-case
+        (if (write-message `(:emacs-interrupt ,thread-id)
+                           :expected-generation generation)
+            (list :success t :thread thread-id :message "Interrupt sent")
+            (cl-tron-mcp/resources:make-error "SWANK_CONNECTION_CLOSED"))
+      (error (e)
+        (cl-tron-mcp/resources:make-error
+         "INTERRUPT_ERROR" :details (list :error (princ-to-string e)))))))
+
+(defun swank-abort-thread (&key (thread-id t))
+  "Abort the active debugger, or interrupt THREAD-ID when no debugger is active."
+  (multiple-value-bind (debugger-thread level episode)
+      (bordeaux-threads:with-lock-held (*event-mutex*)
+        (values *debugger-thread* *debugger-level* *debugger-episode*))
+    (if (and debugger-thread
+             (or (eq thread-id t)
+                 (equal thread-id debugger-thread)))
+      (let* ((thread debugger-thread)
+             (response
+               (send-request `(,(swank-sym "SLDB-ABORT"))
+                             :package "CL-USER"
+                             :thread thread)))
+        (if (%debugger-abort-response-p response)
+            (progn
+              (note-debugger-return level
+                                    :expected-thread thread
+                                    :expected-episode episode)
+              (list :success t
+                    :thread thread
+                    :message "Debugger aborted"
+                    :swank-response response))
+            response))
+      (send-swank-interrupt thread-id))))
 
 (defun swank-interrupt ()
   "Interrupt the current evaluation."
-  (handler-case
-      (progn
-        (log-info "Sending interrupt to Swank")
-        (let ((result (send-request `(,(swank-sym "INTERRUPT")) :package "CL-USER" :thread t)))
-          (if (getf result :error)
-              (progn (log-error (format nil "Interrupt failed: ~a" (getf result :message))) result)
-              (progn (log-info "Interrupt sent successfully") result))))
-    (error (e)
-      (log-error (format nil "Interrupt error: ~a" e))
-      (cl-tron-mcp/resources:make-error "INTERRUPT_ERROR"
-                                   :details (list :error (princ-to-string e))))))
+  (send-swank-interrupt t))
 
 ;;; ============================================================
 ;;; Inspection and Documentation
@@ -335,8 +373,19 @@ Returns: success plist or error plist."
   (unless (stringp input)
     (return-from swank-provide-input
       (cl-tron-mcp/resources:make-error "INVALID_INPUT_PARAMETER")))
-  (let ((pending (bordeaux-threads:with-lock-held (*input-request-lock*)
-                   (pop *pending-input-requests*))))
+  (multiple-value-bind (pending generation connected-p)
+      (bordeaux-threads:with-lock-held (*connection-lock*)
+        (if (and *swank-connected* *swank-running*
+                 *swank-socket* *swank-io*)
+            (values
+             (bordeaux-threads:with-lock-held (*input-request-lock*)
+               (pop *pending-input-requests*))
+             *connection-generation*
+             t)
+            (values nil nil nil)))
+    (unless connected-p
+      (return-from swank-provide-input
+        (cl-tron-mcp/resources:make-error "SWANK_NOT_CONNECTED")))
     (unless pending
       (return-from swank-provide-input
         (cl-tron-mcp/resources:make-error "NO_PENDING_INPUT_REQUEST")))
@@ -344,10 +393,17 @@ Returns: success plist or error plist."
           (tag       (cdr pending)))
       (handler-case
           (progn
-            (write-message `(:emacs-return-string ,thread-id ,tag ,input))
-            (log-info (format nil "Input sent to Swank (thread ~a tag ~a)" thread-id tag))
-            (list :success t
-                  :message (format nil "Input '~a' sent to Swank" input)))
+            (if (write-message `(:emacs-return-string ,thread-id ,tag ,input)
+                               :expected-generation generation)
+                (progn
+                  (log-info
+                   (format nil "Input sent to Swank (thread ~a tag ~a)"
+                           thread-id tag))
+                  (list :success t
+                        :message
+                        (format nil "Input '~a' sent to Swank" input)))
+                (cl-tron-mcp/resources:make-error
+                 "SWANK_CONNECTION_CLOSED")))
         (error (e)
           (cl-tron-mcp/resources:make-error "SWANK_WRITE_ERROR"
                                        :details (list :error (princ-to-string e))))))))
@@ -356,9 +412,10 @@ Returns: success plist or error plist."
 ;;; MCP Tool Wrapper Functions
 ;;; ============================================================
 
-(defun mcp-swank-eval (&key code (package "CL-USER"))
+(defun mcp-swank-eval (&key code (package "CL-USER")
+                         (timeout *default-eval-timeout*))
   "MCP tool handler: evaluate Lisp code via Swank."
-  (swank-eval :code code :package package))
+  (swank-eval :code code :package package :timeout timeout))
 
 (defun mcp-swank-compile (&key code (package "CL-USER") (filename "repl"))
   "MCP tool handler: compile Lisp code via Swank."
@@ -368,7 +425,7 @@ Returns: success plist or error plist."
   "MCP tool handler: list all threads in Swank-connected SBCL."
   (swank-threads))
 
-(defun mcp-swank-abort (&key (thread-id :repl-thread))
+(defun mcp-swank-abort (&key (thread-id t))
   "MCP tool handler: abort a thread."
   (swank-abort-thread :thread-id thread-id))
 

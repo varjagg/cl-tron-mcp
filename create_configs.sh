@@ -390,7 +390,7 @@ configure_codex_advanced_options() {
         function emit_options() {
             print "cwd = \"" cwd "\""
             print "startup_timeout_sec = 120"
-            print "tool_timeout_sec = 300"
+            print "tool_timeout_sec = 3700"
             print "enabled = true"
             print "required = false"
             print "default_tools_approval_mode = \"writes\""

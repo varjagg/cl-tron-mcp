@@ -52,8 +52,14 @@
 ;;; Tool-call execution state
 ;;; ============================================================
 
-(defvar *default-tool-timeout* 30
+(defvar *default-tool-timeout* 300
   "Default timeout for tool execution in seconds.")
+
+(defvar *tool-timeout-cleanup-grace* 5
+  "Seconds allowed for a tool's own timeout cleanup before outer interruption.")
+
+(defvar *maximum-tool-timeout* 3600
+  "Largest tool-specific timeout accepted by the public tool schemas.")
 
 (defvar *pending-requests* (make-hash-table :test 'eql)
   "Hash table tracking pending tool-call requests for cleanup.")
@@ -73,6 +79,39 @@
              (format stream
                      "Timeout: ~a"
                      (timeout-error-message condition)))))
+
+(defun call-with-timeout (thunk timeout)
+  "Call THUNK and return its value, or signal TIMEOUT-ERROR after TIMEOUT seconds."
+  (if (or (null timeout) (not (plusp timeout)))
+      (funcall thunk)
+      (handler-case
+          ;; Execute in the request thread so its stdio, tracing, package, and
+          ;; request-id bindings remain intact.  Bordeaux Threads implements
+          ;; this with the host's interrupting timeout facility when available.
+          (bordeaux-threads:with-timeout (timeout)
+            (funcall thunk))
+        (bordeaux-threads:timeout ()
+          (error 'timeout-error
+                 :message (format nil "Tool execution timeout after ~a seconds"
+                                  timeout))))))
+
+(defun requested-tool-timeout (arguments)
+  "Return the outer execution deadline for a tool call.
+
+TIMEOUT is also a domain argument for tools such as REPL_EVAL and SWANK_LAUNCH.
+Their own deadline must fire first so they can clean up pending requests or
+child processes.  The outer deadline therefore includes a small grace period
+and never shortens the server default."
+  (let ((requested
+          (loop for (key value) on arguments by #'cddr
+                when (and (symbolp key)
+                          (string-equal (symbol-name key) "timeout")
+                          (realp value)
+                          (plusp value))
+                  return value)))
+    (+ (max *default-tool-timeout*
+            (min *maximum-tool-timeout* (or requested 0)))
+       *tool-timeout-cleanup-grace*)))
 
 ;;; ============================================================
 ;;; Parameter validation

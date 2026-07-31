@@ -75,6 +75,7 @@
   :serial t
   :depends-on (
     ; :jonathan :alexandria :local-time :bordeaux-threads :closer-mop :log4cl :usocket  :cl-ppcre :flexi-streams
+    :bordeaux-threads
     :hunchentoot
     :cl-tron-mcp/config
     :cl-tron-mcp/json-compat
@@ -388,6 +389,7 @@
   :author "Emmanuel Rialland [alba.intelligence@gmail.com]"
   :licence "Apache"
   :depends-on (
+    :cl-tron-mcp/logging
     ; :jonathan :alexandria :local-time :bordeaux-threads :closer-mop :log4cl :usocket :hunchentoot :cl-ppcre :flexi-streams
     )
   :components (
@@ -420,6 +422,7 @@
   :serial t
   :depends-on (
     :log4cl
+    :bordeaux-threads
     ; :jonathan :alexandria :local-time :bordeaux-threads :closer-mop :log4cl :usocket :hunchentoot :cl-ppcre :flexi-streams
     )
   :components (

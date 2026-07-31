@@ -246,9 +246,11 @@ Port Policy: All agents must use MCP server port 4006. Direct access to port 400
   :output-schema (list :webpage "string" :documentation "string")
   :requires-approval nil
   :documentation-uri "file://docs/tools/tool-install-guide.md"
-  :validation ((validate-string "target_platform" target-platform :required t)
-               (validate-string "format" format :required t))
-  :body (get-skill-installation-guide :target-platform target-platform :format format))
+  :validation ((cl-tron-mcp/tools::validate-string
+                "target_platform" target_platform :required t)
+               (cl-tron-mcp/tools::validate-string
+                "format" format :required t))
+  :body (get-skill-installation-guide target_platform format))
 
 (cl-tron-mcp/tools:define-simple-tool "skill_discover"
   "Discover available agent skills"

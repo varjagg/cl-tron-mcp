@@ -11,7 +11,9 @@
   :documentation-uri "file://docs/tools/swank-connect.md"
   :validation ((when host (validate-string "host" host))
                (when port (validate-integer "port" port :min 1 :max 65535)))
-  :body (cl-tron-mcp/swank:swank-connect :host host :port port))
+  :body (apply #'cl-tron-mcp/swank:swank-connect
+               (append (when host (list :host host))
+                       (when port (list :port port)))))
 
 (define-simple-tool "swank_disconnect"
   "Disconnect from Swank"
@@ -31,13 +33,15 @@
 
 (define-validated-tool "swank_eval"
   "Evaluate code in SBCL"
-  :input-schema (list :code "string" :package "string")
+  :input-schema (list :code "string" :package "string" :timeout "integer")
   :output-schema (list :type "object")
   :requires-approval t
   :documentation-uri "file://docs/tools/swank-eval.md"
   :validation ((validate-string "code" code :required t :min-length 1)
-               (when package (validate-package-name "package" package)))
-  :body (cl-tron-mcp/swank:mcp-swank-eval :code code :package package))
+               (when package (validate-package-name "package" package))
+               (when timeout (validate-integer "timeout" timeout :min 1 :max 3600)))
+  :body (cl-tron-mcp/swank:mcp-swank-eval
+         :code code :package (or package "CL-USER") :timeout (or timeout 300)))
 
 (define-validated-tool "swank_compile"
   "Compile and load code"
@@ -59,12 +63,12 @@
   :function cl-tron-mcp/swank:mcp-swank-threads)
 
 (define-validated-tool "swank_abort"
-  "Abort a thread"
-  :input-schema (list :thread_id "string")
+  "Abort a debugger or interrupt a thread"
+  :input-schema (list :thread_id "integer")
   :output-schema (list :type "object")
   :requires-approval t
   :documentation-uri "file://docs/tools/swank-abort.md"
-  :validation ((validate-string "thread_id" thread_id :required t))
+  :validation ((validate-integer "thread_id" thread_id :required t :min 0))
   :body (cl-tron-mcp/swank:mcp-swank-abort :thread-id thread_id))
 
 (define-simple-tool "swank_interrupt"

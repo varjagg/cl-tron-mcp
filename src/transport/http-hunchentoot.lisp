@@ -75,7 +75,7 @@ Returns (values json-body-string status-code)."
              (length body) *max-request-size*))
     (return-from handle-rpc-body
       (values (cl-tron-mcp/json-compat:to-json
-               (list :|jsonrpc| "2.0" :|id| nil :|error|
+               (list :|jsonrpc| "2.0" :|id| :null :|error|
                      (list :|code| -32602 :|message| "Request too large")))
               413)))
 
@@ -83,7 +83,11 @@ Returns (values json-body-string status-code)."
     (if (not message)
         (values "{}" 400)
         (handler-case
-            (let ((response (cl-tron-mcp/protocol:handle-message message)))
+            (let ((response
+                    (cl-tron-mcp/logging:call-with-diagnostic-io
+                     (lambda ()
+                       (cl-tron-mcp/protocol:handle-message message))
+                     *error-output*)))
               (values (cond ((and response (stringp response)) response)
                             (response (cl-tron-mcp/json-compat:to-json response))
                             (t "{}"))
@@ -91,7 +95,7 @@ Returns (values json-body-string status-code)."
           (error (e)
             (cl-tron-mcp/logging:log-error (format nil "Error handling RPC: ~a" e))
             (values (cl-tron-mcp/json-compat:to-json
-                     (list :|jsonrpc| "2.0" :|id| nil :|error|
+                     (list :|jsonrpc| "2.0" :|id| :null :|error|
                            (list :|code| -32603 :|message| (princ-to-string e))))
                     200))))))
 
@@ -198,7 +202,7 @@ Returns (values json-body-string status-code)."
         (hunchentoot:stop *http-acceptor*)
         (setf *http-acceptor* nil)
         (setf *http-running* nil))
-      (bt:make-thread
+      (cl-tron-mcp/logging:make-diagnostic-thread
        (lambda ()
          (bt:with-lock-held (*http-stop-mutex*)
            (loop while *http-running*

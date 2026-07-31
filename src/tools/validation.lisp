@@ -121,7 +121,7 @@ Raises validation-error if validation fails."
 Raises validation-error if validation fails."
   (validate-string name value :required required :min-length 1)
   (when (and value (stringp value))
-    (unless (cl-ppcre:scan "^[a-zA-Z0-9-]+$" value)
+    (unless (cl-ppcre:scan "^[a-zA-Z0-9._/-]+$" value)
       (error 'validation-error
              :parameter name
              :message "Invalid package name")))

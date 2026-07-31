@@ -1068,6 +1068,10 @@ write_boot_lisp_header(){
         ;; (asdf:load-system :cl-tron-mcp)
         (%boot-log "quickloaded :cl-tron-mcp")
 
+        ;; Configuration validation below can log before START-SERVER runs.
+        ;; Reserve stdout for MCP as soon as the logging system is available.
+        (cl-tron-mcp/logging:ensure-log-to-stream *error-output*)
+
         ;; MCP client settings are supplied in the child process environment.
         (cl-tron-mcp/config:load-config-from-env)
 
