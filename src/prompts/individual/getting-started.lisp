@@ -79,7 +79,7 @@ The MCP server is started by the **client** (Cursor, OpenCode, Kilocode), not by
 
 ## Important Notes
 
-- **Never restart the SBCL session** - All state lives there
+- **Restart the SBCL image only when a clean state is necessary** - Otherwise preserve its state
 - **Tron is a client** - It connects to your running SBCL
 - **Session persists** - Variables, functions, and state remain across calls
 - **Use resources/list** to see available documentation"))))

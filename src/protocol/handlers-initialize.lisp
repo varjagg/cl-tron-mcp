@@ -17,9 +17,10 @@
                'string
                "Tron debugs a long-running SBCL through Swank. First call repl_status; "
                "if disconnected call repl_connect for 127.0.0.1:~d. Prefer unified "
-               "repl_* tools over raw swank_* tools. Inspect before modifying, preserve "
-               "the target session, and never restart or kill it unless the user "
-               "explicitly asks. Codex performs approval for mutating tools when "
+               "repl_* tools over raw swank_* tools. Inspect before modifying and "
+               "preserve the target session by default. Restarting the target image is "
+               "allowed only when a clean state is necessary. Codex performs approval "
+               "for mutating tools when "
                "TRON_APPROVAL_MODE=codex.")
           (cl-tron-mcp/config:get-config :swank-port 4006)))
 

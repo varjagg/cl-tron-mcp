@@ -39,7 +39,8 @@ Tron exposes documentation and guided workflows via MCP standard mechanisms:
 └─────────────────┘         └─────────────────┘
 ```
 
-**Never restart the SBCL session.** Tron connects as a client; all state lives in SBCL.
+**Restart the SBCL image only when a clean state is necessary.** Otherwise preserve
+the running image and its state; Tron connects as a client.
 
 ## First Steps
 

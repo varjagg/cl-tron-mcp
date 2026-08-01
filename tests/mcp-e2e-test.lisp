@@ -33,7 +33,7 @@
                       (let ((instructions (getf result :|instructions|)))
                         (ok (stringp instructions))
                         (ok (search "repl_status" instructions))
-                        (ok (search "never restart or kill" instructions
+                        (ok (search "clean state is necessary" instructions
                                     :test #'char-equal)))))))
 
 (deftest mcp-tool-annotations-test
