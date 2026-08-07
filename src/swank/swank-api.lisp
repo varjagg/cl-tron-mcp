@@ -264,7 +264,7 @@ instead of using swank:break directly."
 ;;; ============================================================
 
 (defun swank-threads ()
-  "List all threads in the Swank-connected SBCL."
+  "List all threads or processes in the Swank-connected remote Lisp image."
   (send-request `(,(swank-sym "LIST-THREADS")) :package "CL-USER" :thread t))
 
 (defun send-swank-interrupt (thread-id)

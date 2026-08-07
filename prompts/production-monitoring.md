@@ -12,7 +12,7 @@ This guide covers production monitoring and health check workflows for SBCL appl
 | Runtime stats | `runtime_stats` | On-demand | Overall statistics |
 | Health check | `health_check` | Continuous | Service health |
 | Metrics export | `metrics_export` | Periodic | Prometheus format |
-| Thread list | `thread_list` | On-demand | Thread status |
+| Target thread/process list | `repl_threads` | On-demand | Remote target status |
 
 ## Core Concepts
 
@@ -171,7 +171,7 @@ Sample after significant operations:
 
 ```json
 {
-  "tool": "thread_list"
+  "tool": "repl_threads"
 }
 ```
 
@@ -193,16 +193,16 @@ Returns:
 }
 ```
 
-### Step 3: Inspect Specific Thread
+### Step 3: Inspect Target Debugger Context
 
 ```json
 {
-  "tool": "thread_inspect",
-  "arguments": {
-    "thread-id": "worker-1"
-  }
+  "tool": "repl_backtrace"
 }
 ```
+
+Use `repl_frame_locals` when a target thread is in the debugger. Do not use
+`thread_inspect` here; it inspects Tron's local MCP process.
 
 ## Workflow 5: Prometheus Metrics Export
 

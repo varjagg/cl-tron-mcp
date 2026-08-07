@@ -25,7 +25,7 @@ Tron currently exposes **91 tools** across **14 categories**.
 | Hot Reload | 2 | Compile code strings and reload ASDF systems |
 | Profiler | 3 | Start, stop, and report profiling |
 | Tracer | 3 | Add/remove/list traces |
-| Threads | 3 | Thread list, inspect, backtrace |
+| Threads | 3 | Local Tron-process thread list, inspect, backtrace |
 | Monitor | 4 | Health, runtime stats, GC, system info |
 | Logging | 5 | Configure logging and emit log messages |
 | XRef | 5 | `who_*` and callee lookup |
@@ -37,8 +37,11 @@ Tron currently exposes **91 tools** across **14 categories**.
 - Need to start working with a live Lisp image? Use `repl_connect`.
 - Need to evaluate or patch code? Use `repl_eval` / `repl_compile`.
 - Need stack and restart information? Use `repl_backtrace`, `repl_frame_locals`, `repl_get_restarts`, `repl_invoke_restart`.
+- Need target thread/process information? Use `repl_threads`; `thread_*` tools inspect
+  Tron's own process.
 - Need lower-level control or special Swank behavior? Drop to the matching `swank_*` tool.
-- Need an ephemeral child Lisp session? Use `swank_launch`.
+- Need an ephemeral child Lisp session? Use `swank_launch`; only those children appear
+  in `swank_process_list`.
 
 ## Full Reference
 

@@ -55,7 +55,7 @@
   :body (cl-tron-mcp/swank:mcp-swank-compile :code code :package package :filename filename))
 
 (define-simple-tool "swank_threads"
-  "List all SBCL threads"
+  "List threads/processes in the connected remote Lisp image via raw Swank"
   :input-schema nil
   :output-schema (list :type "object")
   :requires-approval nil

@@ -1,8 +1,10 @@
 # thread_backtrace
 
-**Short Description:** Get thread backtrace
+**Short Description:** Get a thread backtrace from Tron's local MCP process
 
-**Full Description:** Get backtrace for a specific thread. Use to see what a thread is currently doing or where it's blocked.
+**Full Description:** Request a backtrace for a thread in the process running the Tron
+MCP server. This does not target a thread or process in the Lisp image connected
+through Swank.
 
 **Parameters:**
 
@@ -16,4 +18,5 @@
 (thread_backtrace :threadId "main")
 ```
 
-**Notes:** Use thread_list to get thread IDs. Useful for debugging stuck or blocked threads.
+**Notes:** Use `thread_list` to get local Tron thread IDs. For remote-target listing,
+use `repl_threads`. This tool is omitted from the focused Codex profile.

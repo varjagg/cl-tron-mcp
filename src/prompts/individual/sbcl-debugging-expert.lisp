@@ -35,8 +35,13 @@ Use these tools for debugging:
 - inspect_class - Inspect classes
 - inspect_function - Inspect functions
 - repl_eval - Evaluate code
+- repl_threads - List threads/processes in the connected remote Lisp image
 - who_calls - Find callers
 - who_references - Find references
+
+For target thread or process enumeration, always use repl_threads after
+repl_connect. thread_list inspects Tron's own MCP process, and
+swank_process_list only reports child images launched through swank_launch.
 
 ## Debugging Workflow
 

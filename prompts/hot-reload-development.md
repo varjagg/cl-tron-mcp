@@ -222,7 +222,7 @@ Modify code while threads are running.
 
 ```json
 {
-  "tool": "thread_list"
+  "tool": "repl_threads"
 }
 ```
 
@@ -256,7 +256,7 @@ Note which threads are using the code to be modified.
 
 ```json
 {
-  "tool": "thread_list"
+  "tool": "repl_threads"
 }
 ```
 

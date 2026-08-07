@@ -138,8 +138,12 @@ For interactive debugging and hot reload:
 1. start the target Lisp image with Swank,
 2. start Tron,
 3. connect with `repl_connect`,
-4. use `repl_eval`, `repl_backtrace`, `repl_frame_locals`, `repl_get_restarts`, and `repl_compile`,
+4. use `repl_threads`, `repl_eval`, `repl_backtrace`, `repl_frame_locals`,
+   `repl_get_restarts`, and `repl_compile`,
 5. continue with `repl_continue` or invoke a restart.
+
+Use `repl_threads` for threads or processes in the connected target. `thread_list`
+examines Tron's own MCP process instead.
 
 If you need to launch a disposable SBCL session from Tron itself, use the managed-process tools:
 
@@ -147,6 +151,9 @@ If you need to launch a disposable SBCL session from Tron itself, use the manage
 - `swank_process_list`
 - `swank_process_status`
 - `swank_kill`
+
+These managed-process tools only know about child images launched through
+`swank_launch`; they do not enumerate an already-running remote target or host OS.
 
 ## Documentation Map
 

@@ -45,7 +45,7 @@ Only processes launched via swank_launch can be killed this way."
   (cl-tron-mcp/swank:kill-managed-process :port port))
 
 (define-simple-tool "swank_process_list"
-  "List all SBCL+Swank processes currently managed by this MCP instance."
+  "List child SBCL+Swank images launched by this MCP; does not query the remote REPL"
   :input-schema nil
   :output-schema (list :type "object")
   :requires-approval nil
@@ -53,7 +53,7 @@ Only processes launched via swank_launch can be killed this way."
   :function cl-tron-mcp/swank:list-managed-processes)
 
 (define-validated-tool "swank_process_status"
-  "Get the status of a specific managed SBCL+Swank process by port."
+  "Get status for a child SBCL+Swank image launched by this MCP, selected by port."
   :input-schema (list :port "integer")
   :output-schema (list :type "object")
   :requires-approval nil

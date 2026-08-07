@@ -170,7 +170,7 @@ Or kill the process in the terminal where the server is running.
 
 - Use `profile_start` and `profile_stop` to measure
 - Check for infinite loops with `trace_function`
-- Use `thread_list` to see if threads are stuck
+- Use `repl_threads` to see whether target threads are stuck
 
 ### High Memory Usage
 

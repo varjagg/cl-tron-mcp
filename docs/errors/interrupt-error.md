@@ -28,8 +28,8 @@ This error occurs when an interrupt operation fails. The specific error message 
 ;; Check connection status
 (swank_status)
 
-;; List threads to find target
-(thread_list)
+;; List threads/processes in the connected target
+(repl_threads)
 
 ;; Retry interrupt with correct parameters
 (swank_interrupt :thread-id "thread-123")
@@ -38,6 +38,5 @@ This error occurs when an interrupt operation fails. The specific error message 
 ## Related Tools
 
 - `swank_interrupt` - Interrupt execution
-- `thread_list` - List threads
-- `thread_inspect` - Inspect a thread
+- `repl_threads` - List threads/processes in the connected target
 - `swank_status` - Check connection status

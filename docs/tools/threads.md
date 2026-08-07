@@ -1,93 +1,34 @@
-# Thread Debugging Tools
+# Local Tron Thread Diagnostics
 
-Tools for managing and debugging multi-threaded SBCL applications.
+The `thread_*` tools inspect the process running the Tron MCP server. They do not
+cross the Swank connection and therefore do not describe the application being
+debugged.
+
+For the connected remote Lisp image, use `repl_threads`. On implementations such as
+Clozure CL, Swank calls these runtime objects processes; `repl_threads` is still the
+correct tool.
 
 ## Tools Overview
 
-| Tool | Purpose | Approval Required |
-|------|---------|------------------|
-| `thread_list` | List all threads | No |
-| `thread_inspect` | Inspect thread state | No |
-| `thread_debug` | Attach debugger | Yes (:modify-restarts) |
-| `thread_interrupt` | Send interrupt | Yes (:terminate-thread) |
-| `thread_kill` | Terminate thread | Yes (:terminate-thread) |
-| `thread_create` | Create new thread | Yes (:modify-running-code) |
-| `thread_dump_all` | Get all thread stacks | No |
+| Tool | Scope | Purpose | Approval Required |
+| --- | --- | --- | --- |
+| `thread_list` | Local Tron process | List local MCP threads | No |
+| `thread_inspect` | Local Tron process | Inspect local MCP thread state | No |
+| `thread_backtrace` | Local Tron process | Request a local MCP thread backtrace | No |
+| `repl_threads` | Connected remote target | List target threads/processes via Swank | No |
 
-## thread_list
+The focused Codex profile exposes `repl_threads` and omits the local-only `thread_*`
+tools. The full profile retains them for diagnosing Tron itself.
 
-### Overview
+## Managed Processes Are Different
 
-List all threads with their status.
-
-### Tool Definition
-
-```json
-{
-  "name": "thread_list",
-  "description": "List all threads with status"
-}
-```
-
-### Return Value
-
-```json
-{
-  "threads": [
-    {
-      "id": "T1-12345",
-      "name": "worker-1",
-      "state": ":running",
-      "priority": 0
-    },
-    {
-      "id": "T1-12346",
-      "name": "repl",
-      "state": ":waiting",
-      "priority": 0
-    }
-  ]
-}
-```
-
-## thread_kill
-
-### Overview
-
-Terminate a thread. Use with caution.
-
-### Tool Definition
-
-```json
-{
-  "name": "thread_kill",
-  "description": "Terminate thread",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "thread_id": {
-        "type": "string",
-        "description": "Thread ID to terminate"
-      }
-    },
-    "required": ["thread_id"]
-  }
-}
-```
-
-### Approval Required
-
-Requires `:terminate-thread` approval.
-
-### User Prompt
-
-```
-AI agent wants to terminate thread "worker-2":
-Reason: Thread stuck in infinite loop
-
-Allow? [Yes/No] Timeout: 30s
-```
+`swank_process_list` reads Tron's managed-child registry. It only includes Lisp images
+created through `swank_launch`; it is neither a remote-target thread listing nor an OS
+process listing.
 
 ## See Also
 
-- @prompts/debugging-workflows.md - Thread debugging scenarios
+- [repl_threads](repl-threads.md)
+- [thread_list](thread-list.md)
+- [swank_process_list](swank-process-list.md)
+- [Debugging workflows](../../prompts/debugging-workflows.md)

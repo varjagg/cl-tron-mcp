@@ -298,14 +298,19 @@ EXPLORE → EXPERIMENT → PERSIST → VERIFY → HOT-RELOAD
 | Hot Reload | Live code modification | `code_compile_string`, `reload_system` |
 | Profiler | Performance analysis | `profile_start`, `profile_stop` |
 | Tracer | Function tracing | `trace_function`, `trace_list` |
-| Threads | Thread management | `thread_list`, `thread_inspect`, `thread_backtrace` |
+| Threads | Local Tron-process diagnostics | `thread_list`, `thread_inspect`, `thread_backtrace` |
 | Monitor | Production monitoring | `health_check`, `runtime_stats` |
 | Logging | Package logging | `log_configure`, `log_info` |
 | XRef | Cross-reference | `who_calls`, `who_references`, `list_callees` |
 | Security | Approval whitelist | `whitelist_add`, `whitelist_status` |
 | Swank | Raw Swank operations (21) | `swank_connect`, `swank_eval`, `swank_backtrace`, `swank_step` |
 | Managed Processes | Launch and supervise SBCL+Swank children (4) | `swank_launch`, `swank_process_list`, `swank_kill` |
-| Unified | Preferred high-level REPL workflow (24) | `repl_connect`, `repl_eval`, `repl_step`, `repl_continue` |
+| Unified | Preferred remote-target workflow (24) | `repl_connect`, `repl_threads`, `repl_eval`, `repl_step` |
+
+**Thread/process scope:** After `repl_connect`, use `repl_threads` to list threads or
+processes in the connected remote Lisp image. `thread_list` examines Tron's own MCP
+process. `swank_process_list` only reports child images launched by this Tron instance
+through `swank_launch`; it does not enumerate the connected target or host OS.
 
 ## Project Structure
 

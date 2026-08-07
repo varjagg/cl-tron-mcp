@@ -12,6 +12,14 @@ For the MCP to interact with Swank the same way a user in Slime would—see outp
 2. **MCP server**
    Started by the MCP client (Cursor, Kilocode, Opencode) via `start-mcp.sh` or equivalent. It runs in a separate process and connects to the Lisp session as a **Swank client**. The MCP then uses Swank facilities (eval, backtrace, restarts, stepping, inspect, etc.) over the protocol—the same way Slime does.
 
+### Thread and Process Tool Scope
+
+- Use `repl_threads` to list threads or processes in the connected remote Lisp image.
+- `thread_list`, `thread_inspect`, and `thread_backtrace` inspect Tron's own local MCP
+  process. They are not remote-target tools.
+- `swank_process_list` reports only child images launched by the current Tron instance
+  through `swank_launch`. It does not enumerate the connected target or host OS.
+
 ### Agent Workflow
 
 1. User starts the Lisp session with Swank (e.g. `(swank:create-server :port 4006)`).

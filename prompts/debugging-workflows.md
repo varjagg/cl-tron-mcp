@@ -129,11 +129,11 @@ Attach debugger to a running process or set breakpoints proactively.
 
 ```json
 {
-  "tool": "thread_list"
+  "tool": "repl_threads"
 }
 ```
 
-Returns all threads with their states.
+Returns threads or processes in the connected target with their states.
 
 ### Step 3: Attach Debugger to Thread
 
@@ -398,7 +398,7 @@ Check generation sizes and GC frequency.
 ### Debugger Already Active
 
 If debugger is already active in a thread:
-- Use `thread_list` to find other threads
+- Use `repl_threads` to find other target threads
 - Debug from a different thread
 - Use `debugger_continue` to exit first
 

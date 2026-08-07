@@ -15,9 +15,12 @@
   "Return concise cross-tool guidance for MCP clients such as Codex."
   (format nil (concatenate
                'string
-               "Tron debugs a long-running SBCL through Swank. First call repl_status; "
-               "if disconnected call repl_connect for 127.0.0.1:~d. Prefer unified "
-               "repl_* tools over raw swank_* tools. Inspect before modifying and "
+               "Tron connects to a long-running Lisp image through Swank. First call "
+               "repl_status; if disconnected call repl_connect for 127.0.0.1:~d. "
+               "For threads/processes in the connected target, use repl_threads. "
+               "thread_list inspects Tron's own MCP process; swank_process_list only "
+               "reports child images launched by swank_launch. Prefer unified repl_* "
+               "tools over raw swank_* tools. Inspect before modifying and "
                "preserve the target session by default. Restarting the target image is "
                "allowed only when a clean state is necessary. Codex performs approval "
                "for mutating tools when "

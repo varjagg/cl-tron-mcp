@@ -153,7 +153,7 @@ slot on :spawn-style servers)."
 ;;; ============================================================
 
 (defun repl-threads ()
-  "List all threads in the connected SBCL."
+  "List all threads or processes in the connected remote Lisp image."
   (unless *repl-connected*
     (return-from repl-threads (make-not-connected-error)))
   (mcp-swank-threads))
@@ -343,7 +343,7 @@ the debugger's restart list, matching the order shown in the :debug payload)."
   :body (repl-compile :code code :package (or package "CL-USER") :filename (or filename "repl")))
 
 (define-simple-tool "repl_threads"
-  "List all REPL threads"
+  "List threads/processes in the connected remote Lisp image via Swank"
   :input-schema nil
   :output-schema (list :type "object")
   :requires-approval nil

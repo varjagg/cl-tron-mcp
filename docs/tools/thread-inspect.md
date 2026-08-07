@@ -1,8 +1,10 @@
 # thread_inspect
 
-**Short Description:** Inspect thread details
+**Short Description:** Inspect a thread in Tron's local MCP process
 
-**Full Description:** Get detailed information about a specific thread including name, state, and stack usage. Use to understand thread behavior.
+**Full Description:** Get information about a thread in the process running the Tron
+MCP server. This does not inspect a thread or process in the Lisp image connected
+through Swank.
 
 **Parameters:**
 
@@ -16,4 +18,5 @@
 (thread_inspect :threadId "main")
 ```
 
-**Notes:** Use thread_list to get thread IDs. Useful for understanding what a thread is doing and its resource usage.
+**Notes:** Use `thread_list` to get local Tron thread IDs. For remote-target listing,
+use `repl_threads`. This tool is omitted from the focused Codex profile.

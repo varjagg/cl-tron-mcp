@@ -1,8 +1,10 @@
 # thread_list
 
-**Short Description:** List all threads
+**Short Description:** List threads in Tron's local MCP process
 
-**Full Description:** List all threads with their status (running, waiting, etc). Use to monitor multi-threaded applications and debug concurrency issues.
+**Full Description:** List threads in the process running the Tron MCP server, with
+their status (running, waiting, etc.). This does not query the Lisp image connected
+through Swank.
 
 **Parameters:** None
 
@@ -14,4 +16,5 @@
 (thread_list)
 ```
 
-**Notes:** Useful for debugging multi-threaded applications and identifying stuck or deadlocked threads.
+**Notes:** Use `repl_threads` for the connected remote application. This local tool is
+for debugging Tron itself and is omitted from the focused Codex tool profile.

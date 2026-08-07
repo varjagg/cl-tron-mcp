@@ -33,6 +33,12 @@
                       (let ((instructions (getf result :|instructions|)))
                         (ok (stringp instructions))
                         (ok (search "repl_status" instructions))
+                        (ok (search "use repl_threads" instructions
+                                    :test #'char-equal))
+                        (ok (search "Tron's own MCP process" instructions
+                                    :test #'char-equal))
+                        (ok (search "swank_process_list" instructions
+                                    :test #'char-equal))
                         (ok (search "clean state is necessary" instructions
                                     :test #'char-equal)))))))
 
@@ -71,10 +77,44 @@
                                                    (getf tool :|name|))
                                                  tools)))
                              (ok (member "repl_eval" names :test #'string=))
+                             (ok (member "repl_threads" names :test #'string=))
                              (ok (member "health_check" names :test #'string=))
                              (ok (not (member "swank_eval" names :test #'string=)))
-                             (ok (< (length names) 94))))
+                             (ok (not (member "thread_list" names :test #'string=)))
+                             (ok (not (member "thread_inspect" names :test #'string=)))
+                             (ok (not (member "thread_backtrace" names
+                                             :test #'string=)))
+                             (ok (< (length names) 94)))
+                           (cl-tron-mcp/config:set-config :tool-profile :all)
+                           (let* ((response (cl-tron-mcp/protocol:handle-tools-list 1))
+                                  (parsed (parse-json-response response))
+                                  (tools (getf (getf parsed :|result|) :|tools|))
+                                  (names (mapcar (lambda (tool)
+                                                   (getf tool :|name|))
+                                                 tools)))
+                             (ok (member "thread_list" names :test #'string=))
+                             (ok (member "thread_inspect" names :test #'string=))
+                             (ok (member "thread_backtrace" names :test #'string=))))
                       (cl-tron-mcp/config:set-config :tool-profile old-profile)))))
+
+(deftest mcp-thread-tool-scope-descriptions-test
+         (testing "Thread and process descriptors identify their execution scope"
+                  (let* ((repl-threads
+                           (cl-tron-mcp/tools::get-tool-descriptor "repl_threads"))
+                         (local-threads
+                           (cl-tron-mcp/tools::get-tool-descriptor "thread_list"))
+                         (managed-processes
+                           (cl-tron-mcp/tools::get-tool-descriptor
+                            "swank_process_list")))
+                    (ok (search "connected remote Lisp image"
+                                (gethash :|description| repl-threads)
+                                :test #'char-equal))
+                    (ok (search "local MCP process"
+                                (gethash :|description| local-threads)
+                                :test #'char-equal))
+                    (ok (search "does not query the remote REPL"
+                                (gethash :|description| managed-processes)
+                                :test #'char-equal)))))
 
 (deftest mcp-codex-approval-delegation-test
          (testing "Codex stdio mode delegates protected-tool approval to the client"

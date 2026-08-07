@@ -34,10 +34,10 @@
     "repl_get_restarts" "repl_help" "repl_inspect" "repl_invoke_restart"
     "repl_list_breakpoints" "repl_next" "repl_out" "repl_remove_breakpoint"
     "repl_set_breakpoint" "repl_status" "repl_step" "repl_threads"
-    "repl_toggle_breakpoint" "runtime_stats" "system_info" "thread_backtrace"
-    "thread_inspect" "thread_list" "trace_function" "trace_list"
-    "trace_remove" "who_binds" "who_calls" "who_references" "who_sets")
-  "Focused high-level tool set exposed when TRON_TOOL_PROFILE=codex.")
+    "repl_toggle_breakpoint" "runtime_stats" "system_info" "trace_function"
+    "trace_list" "trace_remove" "who_binds" "who_calls" "who_references"
+    "who_sets")
+  "Focused remote-target tool set exposed when TRON_TOOL_PROFILE=codex.")
 
 (defun json-boolean (value)
   "Return VALUE in the marker convention expected by json-compat."

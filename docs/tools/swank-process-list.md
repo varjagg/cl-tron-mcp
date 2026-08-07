@@ -2,7 +2,9 @@
 
 **Short Description:** List Tron-managed SBCL+Swank processes
 
-**Full Description:** Return the current contents of Tron's managed-process registry, including port, PID, host, uptime, and communication style for each launched process.
+**Full Description:** Return the current contents of Tron's managed-process registry,
+including port, PID, host, uptime, and communication style for each child image
+launched through `swank_launch`.
 
 **Parameters:** None
 
@@ -14,4 +16,5 @@
 (swank_process_list)
 ```
 
-**Notes:** Only processes launched through `swank_launch` appear here.
+**Notes:** This does not query the connected remote REPL and is not an OS process
+listing. Use `repl_threads` for threads or processes in the connected target.
